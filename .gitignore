@@ -1,0 +1,59 @@
+# Python & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv/
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*
+memory_config.json
+config.json
+keys.json
+*.key
+*.pem
+
+# IDE & Editor
+.vscode/
+.idea/
+.agents/
+*.swp
+*.swo
+.DS_Store
+
+# Pytest & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# User Data & Test Audio / Logs
+*.log
+*.wav
+*.mp3
+*.m4a
+scratch/
+E:/Saved_Clips/
