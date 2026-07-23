@@ -69,6 +69,14 @@ class AudioRecorder(QObject):
         self._stop_reason = "manual"
 
         try:
+            if self._stream:
+                try:
+                    self._stream.stop()
+                    self._stream.close()
+                except Exception:
+                    pass
+                self._stream = None
+
             self._stream = sd.InputStream(
                 samplerate=self._sample_rate,
                 channels=self._channels,
@@ -80,7 +88,7 @@ class AudioRecorder(QObject):
             self._stream.start()
             self._is_recording = True
             self.recording_started.emit()
-            logger.info("AudioRecorder started recording")
+            logger.info("AudioRecorder started recording (fresh clean stream)")
             return True
         except Exception as e:
             err_msg = f"Failed to start audio stream: {e}"
@@ -185,7 +193,16 @@ class AudioRecorder(QObject):
             wf.setsampwidth(2)  # 16-bit PCM
             wf.setframerate(self._sample_rate)
             if chunks:
-                pcm_data = np.concatenate(chunks, axis=0).tobytes()
+                combined = np.concatenate(chunks, axis=0)
+                # Automatic Gain Control (AGC) & Software Audio Booster
+                max_val = float(np.max(np.abs(combined)))
+                if 0 < max_val < 24000.0:
+                    # Boost quiet speech up to 4x (400% gain boost) to target ~85% peak level (28,000)
+                    boost_factor = min(4.0, 28000.0 / max_val)
+                    boosted = np.clip(combined.astype(np.float32) * boost_factor, -32768, 32767).astype(np.int16)
+                    pcm_data = boosted.tobytes()
+                else:
+                    pcm_data = combined.tobytes()
                 wf.writeframes(pcm_data)
             else:
                 wf.writeframes(b"")

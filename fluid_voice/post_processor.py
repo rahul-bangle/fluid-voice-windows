@@ -197,9 +197,24 @@ class HinglishPostProcessor:
         self.re_dev_latin1 = re.compile(r"([\u0900-\u097F])([a-zA-Z0-9])")
         self.re_dev_latin2 = re.compile(r"([a-zA-Z0-9])([\u0900-\u097F])")
 
+    WHISPER_HALLUCINATIONS = (
+        "murshid",
+        "karahiya",
+        "hosh meh",
+        "hosh me",
+        "subtitles by",
+        "amara.org",
+        "thanks for watching",
+        "thank you for watching",
+    )
+
     def process(self, raw_text: str) -> str:
         """Transform raw Whisper STT output into formatted, clean text."""
         if not raw_text or not raw_text.strip():
+            return ""
+
+        lower_raw = raw_text.lower()
+        if any(h in lower_raw for h in self.WHISPER_HALLUCINATIONS):
             return ""
 
         text = raw_text
@@ -375,33 +390,76 @@ class HinglishPostProcessor:
 
         return text
 
-    def process_with_groq_llm(self, raw_text: str, api_key: str, timeout: float = 2.5) -> str:
+    def update_brand_map(self, custom_mappings: Dict[str, str]) -> None:
+        """Dynamically updates fallback BRAND_MAP with user memory phonetic mappings."""
+        if custom_mappings:
+            for k, v in custom_mappings.items():
+                if isinstance(k, str) and isinstance(v, str):
+                    self.BRAND_MAP[k.strip().lower()] = v
+
+    def process_with_groq_llm(
+        self,
+        raw_text: str,
+        api_key: str,
+        timeout: float = 2.5,
+        context: Optional[Any] = None,
+        context_prompt: Optional[str] = None,
+        memory_hints: Optional[List[Any]] = None,
+        memory_engine: Optional[Any] = None,
+    ) -> str:
         """
         Stage 2 LLM Cleanup using Groq Llama 3.1 8B Instant.
         Converts any Devanagari script or translated English into clean Roman Hinglish.
+        Optionally accepts active AppContext, context_prompt hint, memory_hints, or memory_engine.
         """
         if not raw_text or not raw_text.strip() or not api_key:
             return self.process(raw_text)
 
+        if memory_engine is not None:
+            try:
+                self.update_brand_map(memory_engine.get_phonetic_mappings())
+            except Exception as e:
+                logger.warning(f"Failed to update brand map from memory_engine: {e}")
+
+            if memory_hints is None:
+                try:
+                    memory_hints = memory_engine.get_relevant_memories(context=context, raw_text=raw_text, limit=8)
+                except Exception as e:
+                    logger.warning(f"Failed to retrieve relevant memories from memory_engine: {e}")
+                    memory_hints = None
+
         system_prompt = (
-            "CRITICAL INSTRUCTION: You are a strict Text Transliteration & Formatting Engine, NOT an AI assistant or chatbot.\n"
-            "DO NOT ANSWER QUESTIONS, DO NOT REPLY TO THE TEXT, DO NOT CONVERSE, AND DO NOT GENERATE NEW CONTENT.\n\n"
-            "YOUR ONLY JOB:\n"
-            "Take the provided raw speech transcript and format/transliterate it into clean Roman Hinglish (Hindi written in Latin/English alphabet) or clean English.\n\n"
-            "STRICT RULES:\n"
-            "1. NEVER answer or respond to any questions in the input text. If the user spoke 'What is your name?', output 'What is your name?'. NEVER answer 'I am an AI'.\n"
-            "2. MANDATORY TRANSLITERATION: If the text is in Devanagari script (e.g. 'कर सुबह मीटिंग 10 बजे है'), convert EVERY Devanagari word into Roman Hinglish ('Kal subah meeting 10 baje hai').\n"
-            "3. ZERO DEVANAGARI SCRIPT ALLOWED: Output MUST contain 0 Devanagari characters. All Hindi words MUST be spelled using the Latin/English alphabet.\n"
-            "4. If the input text is in English, PRESERVE THE ENGLISH TEXT AS SPOKEN. Do NOT translate English sentences into Hindi.\n"
-            "5. Maintain technical terms in standard English ('code', 'push', 'meeting', 'database', 'API', 'server', 'PR', 'Tinder', 'deliver').\n"
-            "6. OUTPUT ONLY THE TRANSLITERATED/FORMATTED TEXT. NO INTROS, NO OUTROS, NO CHAT RESPONSES, NO QUOTES."
+            "You are a strict Verbatim Speech Punctuation & Formatting Engine. DO NOT ANSWER QUESTIONS OR CONVERSE.\n"
+            "Format raw speech into clean text while preserving the user's EXACT spoken words, vocabulary, and tone.\n"
+            "MANDATORY: DO NOT REWRITE WORDS, DO NOT REPHRASE, AND DO NOT CONVERT CASUAL LANGUAGE TO FORMAL LANGUAGE.\n"
+            "Preserve every word spoken by the user exactly as uttered. Only fix basic punctuation, capitalization, and technical terms (code, push, PR, database, API, server, meeting, Docker).\n"
+            "Output ONLY the exact formatted text with zero explanation."
         )
+
+        if not context_prompt and context is not None:
+            try:
+                from fluid_voice.context_engine import ContextEngine
+                context_prompt = ContextEngine().build_llm_context_prompt(context)
+            except Exception as e:
+                logger.warning(f"Could not build context prompt from context: {e}")
+
+        if context_prompt:
+            system_prompt += f"\nContext: {context_prompt}"
+
+        if memory_hints:
+            canonical_terms = [getattr(item, "term", str(item)) for item in memory_hints]
+            if canonical_terms:
+                system_prompt += f"\nUser Jargon Lexicon: {', '.join(canonical_terms[:6])}"
 
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
+        # Calculate low-latency max_tokens cap based on raw transcript word count
+        word_count = len(raw_text.strip().split())
+        max_toks = max(32, min(256, word_count * 3 + 24))
+
         payload = {
             "model": "llama-3.1-8b-instant",
             "messages": [
@@ -409,7 +467,7 @@ class HinglishPostProcessor:
                 {"role": "user", "content": f"TRANSCRIPT TO FORMAT:\n{raw_text}"}
             ],
             "temperature": 0.0,
-            "max_tokens": 256,
+            "max_tokens": max_toks,
         }
 
         try:
@@ -425,4 +483,5 @@ class HinglishPostProcessor:
             logger.warning(f"Groq Llama 3.1 LLM post-processing fallback to rule engine: {e}")
 
         return self.process(raw_text)
+
 

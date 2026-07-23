@@ -17,14 +17,15 @@ logger = logging.getLogger(__name__)
 
 # Constants
 GROQ_STT_ENDPOINT = "https://api.groq.com/openai/v1/audio/transcriptions"
-PRIMARY_MODEL = "whisper-large-v3-turbo"
-FALLBACK_MODEL = "whisper-large-v3"
+PRIMARY_MODEL = "whisper-large-v3"
+FALLBACK_MODEL = "whisper-large-v3-turbo"
 DEFAULT_TIMEOUT_SECONDS = 5.0
 
-DEFAULT_HINGLISH_PROMPT = (
-    "Haan bhai, code push kar do, 5 baje meeting hai. Sab badhiya hai, aap batao kya haal chaal hain? "
-    "Please PR review kar lena, main office aake discuss kar leta hoon. Thanks!"
+DEFAULT_ENGLISH_PROMPT = (
+    "Hi Rahul, how may I help you today? Please deploy the latest Docker container to Kubernetes "
+    "and review the pull request. Everything is working smoothly. Thanks!"
 )
+DEFAULT_HINGLISH_PROMPT = DEFAULT_ENGLISH_PROMPT
 
 
 class GroqSTTError(Exception):

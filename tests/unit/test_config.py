@@ -23,10 +23,17 @@ def test_get_app_data_dir_default_and_custom_env(tmp_path):
 
     # Custom LOCALAPPDATA override
     custom_appdata = tmp_path / "CustomAppData"
-    with patch.dict(os.environ, {"LOCALAPPDATA": str(custom_appdata)}):
+    old_env = os.environ.get("LOCALAPPDATA")
+    try:
+        os.environ["LOCALAPPDATA"] = str(custom_appdata)
         override_dir = get_app_data_dir()
         assert override_dir == custom_appdata / "FluidVoice"
         assert override_dir.exists()
+    finally:
+        if old_env is not None:
+            os.environ["LOCALAPPDATA"] = old_env
+        else:
+            os.environ.pop("LOCALAPPDATA", None)
 
 
 def test_config_manager_default_values(tmp_path):

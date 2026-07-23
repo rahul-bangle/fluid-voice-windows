@@ -1,4 +1,5 @@
 import sys
+import uuid
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -8,7 +9,7 @@ from fluid_voice.tray import TrayState
 
 
 def test_app_initialization(qapp, tmp_path):
-    mutex_name = f"Global\\Test_FluidVoice_Mutex_{tmp_path.name}"
+    mutex_name = f"Global\\Test_FluidVoice_Mutex_{uuid.uuid4().hex}"
     app = FluidVoiceApp(config_dir=tmp_path, mutex_name=mutex_name)
 
     assert app.current_state == AppState.IDLE
@@ -23,9 +24,11 @@ def test_app_initialization(qapp, tmp_path):
 
 
 def test_app_state_transitions_and_signals(qapp, tmp_path):
-    mutex_name = f"Global\\Test_FluidVoice_Mutex_State_{tmp_path.name}"
+    mutex_name = f"Global\\Test_FluidVoice_Mutex_State_{uuid.uuid4().hex}"
     app = FluidVoiceApp(config_dir=tmp_path, mutex_name=mutex_name)
     app.initialize()
+    if app.audio_recorder:
+        app.audio_recorder.start_recording = MagicMock(return_value=True)
 
     emitted_states = []
     app.state_changed.connect(lambda state, msg: emitted_states.append((state, msg)))

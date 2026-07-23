@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import ctypes
 import signal
 import logging
@@ -17,6 +18,9 @@ from fluid_voice.post_processor import HinglishPostProcessor
 from fluid_voice.ui.overlay import OverlayWidget
 from fluid_voice.ui.settings import SettingsDialog
 from fluid_voice.paster import AutoPaster
+from fluid_voice.context_engine import ContextEngine, AppContext
+from fluid_voice.memory_engine import MemoryEngine
+from fluid_voice.sfx_engine import SFXEngine
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +39,7 @@ class FluidVoiceApp(QObject):
     """
     Core Application Controller for FluidVoice.
     Glues together HotkeyListener, AudioRecorder, GroqSTTClient, HinglishPostProcessor,
-    OverlayWidget, AutoPaster, SystemTrayIcon, and SettingsDialog.
+    ContextEngine, OverlayWidget, AutoPaster, SystemTrayIcon, and SettingsDialog.
     """
     state_changed = pyqtSignal(object, str)  # (AppState, message)
 
@@ -51,6 +55,7 @@ class FluidVoiceApp(QObject):
         self._lock_file_path = (config_dir or get_app_data_dir()) / "app.lock"
         self._state = AppState.IDLE
         self._target_hwnd = 0
+        self._current_context: AppContext | None = None
 
         # Core Subsystems
         self.config_manager = ConfigManager(config_dir=config_dir)
@@ -59,8 +64,10 @@ class FluidVoiceApp(QObject):
         self.audio_recorder: AudioRecorder | None = None
         self.stt_client: GroqSTTClient | None = None
         self.post_processor: HinglishPostProcessor | None = None
+        self.context_engine: ContextEngine | None = ContextEngine()
         self.overlay_widget: OverlayWidget | None = None
         self.paster_engine: AutoPaster | None = None
+        self.memory_engine: MemoryEngine | None = None
 
     @property
     def current_state(self) -> AppState:
@@ -115,9 +122,19 @@ class FluidVoiceApp(QObject):
         if self.paster_engine is None:
             self.paster_engine = AutoPaster()
 
+        # Initialize Memory Engine
+        if self.memory_engine is None:
+            self.memory_engine = MemoryEngine(filepath=self.config_manager.config_dir / "user_memory.json")
+
+        # Initialize SFX Engine
+        if not hasattr(self, "sfx_engine") or self.sfx_engine is None:
+            self.sfx_engine = SFXEngine(enabled=getattr(self.config_manager.data, "sfx_enabled", True))
+
         # Initialize Post Processor
         if self.post_processor is None:
             self.post_processor = HinglishPostProcessor()
+        if self.memory_engine:
+            self.post_processor.update_brand_map(self.memory_engine.get_phonetic_mappings())
 
         # Initialize Overlay Widget
         if self.overlay_widget is None:
@@ -141,7 +158,7 @@ class FluidVoiceApp(QObject):
                 self.stt_client = GroqSTTClient(
                     api_key=api_key,
                     prompt=self.config_manager.data.hinglish_prompt,
-                    language=None,
+                    language=getattr(self.config_manager.data, "language", "en"),
                 )
             except Exception as e:
                 logger.warning(f"Could not initialize GroqSTTClient on startup: {e}")
@@ -208,10 +225,20 @@ class FluidVoiceApp(QObject):
         else:
             self._target_hwnd = 0
 
+        if self.context_engine:
+            try:
+                self._current_context = self.context_engine.get_active_context()
+            except Exception as e:
+                logger.warning(f"Failed to capture context: {e}")
+                self._current_context = None
+
         if self.overlay_widget:
             self.overlay_widget.set_state("listening", "Listening...")
 
         self.set_state(AppState.RECORDING, "Listening...")
+
+        if hasattr(self, "sfx_engine") and self.sfx_engine:
+            self.sfx_engine.play("start")
 
         if self.audio_recorder:
             success = self.audio_recorder.start_recording()
@@ -223,6 +250,9 @@ class FluidVoiceApp(QObject):
         if QThread.currentThread() != self.thread():
             QMetaObject.invokeMethod(self, "stop_recording", Qt.ConnectionType.QueuedConnection)
             return b""
+
+        if hasattr(self, "sfx_engine") and self.sfx_engine:
+            self.sfx_engine.play("stop")
 
         logger.info("Stop recording requested")
         if self._state != AppState.RECORDING:
@@ -258,11 +288,8 @@ class FluidVoiceApp(QObject):
             self.overlay_widget.set_state("error", f"Error: {err_msg}")
 
     def _process_dictation_pipeline(self, audio_bytes: bytes) -> None:
-        if not audio_bytes:
-            logger.warning("Empty audio bytes received in dictation pipeline")
-            self.set_state(AppState.IDLE, "FluidVoice is ready")
-            return
-
+        """Executes the STT transcription and post-processing pipeline."""
+        t_pipeline_start = time.perf_counter()
         try:
             if self.stt_client is None:
                 api_key = self.config_manager.get_api_key()
@@ -271,30 +298,52 @@ class FluidVoiceApp(QObject):
                 self.stt_client = GroqSTTClient(
                     api_key=api_key,
                     prompt=self.config_manager.data.hinglish_prompt,
-                    language=None,
+                    language=getattr(self.config_manager.data, "language", "en"),
                 )
 
             sample_rate = self.audio_recorder._sample_rate if self.audio_recorder else 16000
+            t_stt_start = time.perf_counter()
             print(f"[STAGE 1 STT] 📡 Transcribing {len(audio_bytes)} bytes audio via Groq Whisper-v3...")
             raw_text = self.stt_client.transcribe(audio_bytes, sample_rate=sample_rate)
-            print(f"[STAGE 1 RAW ASR]: '{raw_text}'")
+
+            t_stt_done = time.perf_counter()
+            stt_latency_ms = (t_stt_done - t_stt_start) * 1000.0
+            print(f"[STAGE 1 RAW ASR] ({stt_latency_ms:.1f} ms): '{raw_text}'")
 
             if self.post_processor is None:
                 self.post_processor = HinglishPostProcessor()
 
             api_key = self.config_manager.get_api_key() or os.getenv("GROQ_API_KEY", "").strip()
+            t_llm_start = time.perf_counter()
             print("[STAGE 2 LLM] ⚡ Cleaning & formatting via Groq Llama-3.1-8B Instant...")
-            processed_text = self.post_processor.process_with_groq_llm(raw_text, api_key=api_key)
-            print(f"[STAGE 2 FINAL TEXT]: '{processed_text}'")
+            processed_text = self.post_processor.process_with_groq_llm(
+                raw_text, api_key=api_key, context=self._current_context, memory_engine=self.memory_engine
+            )
+            t_llm_done = time.perf_counter()
+            llm_latency_ms = (t_llm_done - t_llm_start) * 1000.0
+            print(f"[STAGE 2 FINAL TEXT] ({llm_latency_ms:.1f} ms): '{processed_text}'")
 
             if processed_text and processed_text.strip():
                 if self.overlay_widget:
                     self.overlay_widget.set_state("pasted", "Pasted!")
                 self.set_state(AppState.PASTING, "Pasted!")
 
+                t_paste_start = time.perf_counter()
                 if self.config_manager.data.auto_paste and self.paster_engine:
-                    print(f"[PASTE ENGINE] 📋 Auto-pasting into active cursor location...\n")
                     self.paster_engine.paste_text(processed_text, target_hwnd=self._target_hwnd)
+                t_paste_done = time.perf_counter()
+                paste_latency_ms = (t_paste_done - t_paste_start) * 1000.0
+
+                total_processing_ms = (t_paste_done - getattr(self, '_t_key_release', t_pipeline_start)) * 1000.0
+                print("\n=================== [LATENCY METRICS SUMMARY] ===================")
+                print(f"  • Stage 1 Groq Whisper STT Latency   : {stt_latency_ms:.1f} ms")
+                print(f"  • Stage 2 Groq Llama 3.1 LLM Latency  : {llm_latency_ms:.1f} ms")
+                print(f"  • Win32 Auto-Paste Engine Latency     : {paste_latency_ms:.1f} ms")
+                print(f"  • TOTAL KEY RELEASE -> AUTO-PASTE     : {total_processing_ms:.1f} ms")
+                print("=================================================================\n")
+
+                if hasattr(self, "sfx_engine") and self.sfx_engine:
+                    self.sfx_engine.play("paste")
 
                 self.set_state(AppState.IDLE, "FluidVoice is ready")
             else:
@@ -303,6 +352,8 @@ class FluidVoiceApp(QObject):
                 self.set_state(AppState.IDLE, "FluidVoice is ready")
 
         except Exception as err:
+            if hasattr(self, "sfx_engine") and self.sfx_engine:
+                self.sfx_engine.play("error")
             self._handle_pipeline_error(err)
 
     def _handle_pipeline_error(self, err: Exception) -> None:
@@ -339,7 +390,11 @@ class FluidVoiceApp(QObject):
                     self.stt_client.api_key = api_key
                     self.stt_client._headers["Authorization"] = f"Bearer {api_key}"
                 else:
-                    self.stt_client = GroqSTTClient(api_key=api_key, prompt=self.config_manager.data.hinglish_prompt)
+                    self.stt_client = GroqSTTClient(
+                        api_key=api_key,
+                        prompt=self.config_manager.data.hinglish_prompt,
+                        language=getattr(self.config_manager.data, "language", "en"),
+                    )
             except Exception as e:
                 logger.error(f"Failed to update STT client with new API key: {e}")
 
@@ -401,4 +456,12 @@ class FluidVoiceApp(QObject):
                 pass
 
         self.qt_app.quit()
+
+    def __del__(self):
+        if hasattr(self, "_mutex_handle") and self._mutex_handle and sys.platform == "win32":
+            try:
+                ctypes.windll.kernel32.CloseHandle(self._mutex_handle)
+                self._mutex_handle = None
+            except Exception:
+                pass
 

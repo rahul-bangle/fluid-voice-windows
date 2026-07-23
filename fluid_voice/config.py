@@ -30,6 +30,13 @@ def get_app_data_dir() -> Path:
     return path
 
 
+DEFAULT_ENGLISH_PROMPT = (
+    "Hi Rahul, how may I help you today? Please deploy the latest Docker container to Kubernetes "
+    "and review the pull request. Everything is working smoothly. Thanks!"
+)
+DEFAULT_HINGLISH_PROMPT = DEFAULT_ENGLISH_PROMPT
+
+
 @dataclass
 class ConfigData:
     """Application configuration schema with defaults."""
@@ -40,7 +47,8 @@ class ConfigData:
     auto_paste: bool = True
     start_with_windows: bool = False
     theme: str = "dark"
-    hinglish_prompt: str = "Hinglish dictation with mixed Hindi and English words."
+    hinglish_prompt: str = DEFAULT_ENGLISH_PROMPT
+    language: str = "en"
     groq_api_key_fallback: str = ""
 
 
