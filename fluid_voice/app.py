@@ -14,7 +14,7 @@ from fluid_voice.tray import FluidVoiceTrayIcon, TrayState
 from fluid_voice.hotkey import HotkeyListener
 from fluid_voice.audio import AudioRecorder
 from fluid_voice.stt_groq import GroqSTTClient, InvalidAPIKeyError
-from fluid_voice.post_processor import HinglishPostProcessor
+from fluid_voice.post_processor import HinglishPostProcessor, parse_spoken_action
 from fluid_voice.ui.overlay import OverlayWidget
 from fluid_voice.ui.settings import SettingsDialog
 from fluid_voice.paster import AutoPaster
@@ -54,8 +54,11 @@ class FluidVoiceApp(QObject):
         self._mutex_handle = None
         self._lock_file_path = (config_dir or get_app_data_dir()) / "app.lock"
         self._state = AppState.IDLE
+        self._is_jarvis_mode: bool = False
         self._target_hwnd = 0
         self._current_context: AppContext | None = None
+        self._last_raw_transcript: str = ""
+        self._last_transcript: str = ""
 
         # Core Subsystems
         self.config_manager = ConfigManager(config_dir=config_dir)
@@ -72,6 +75,49 @@ class FluidVoiceApp(QObject):
     @property
     def current_state(self) -> AppState:
         return self._state
+
+    @property
+    def is_jarvis_mode(self) -> bool:
+        return self._is_jarvis_mode
+
+    @pyqtSlot()
+    def toggle_jarvis_mode(self) -> None:
+        if QThread.currentThread() != self.thread():
+            QMetaObject.invokeMethod(self, "toggle_jarvis_mode", Qt.ConnectionType.QueuedConnection)
+            return
+
+        self._is_jarvis_mode = not self._is_jarvis_mode
+        mode_name = "Jarvis Hands-Free Mode" if self._is_jarvis_mode else "Push-To-Talk Mode"
+        logger.info(f"Toggled mode: {mode_name}")
+
+        if self.audio_recorder:
+            self.audio_recorder.is_jarvis_mode = self._is_jarvis_mode
+            if self._is_jarvis_mode:
+                try:
+                    self.audio_recorder.speech_chunk_emitted.disconnect(self._on_jarvis_speech_chunk)
+                except Exception:
+                    pass
+                self.audio_recorder.speech_chunk_emitted.connect(self._on_jarvis_speech_chunk)
+                if not self.audio_recorder.is_recording():
+                    self.start_recording()
+
+        if self.tray_icon:
+            state = TrayState.RECORDING if self._is_jarvis_mode else TrayState.IDLE
+            self.tray_icon.set_state(state, f"FluidVoice - {mode_name}")
+
+        if self.overlay_widget:
+            if self._is_jarvis_mode:
+                self.overlay_widget.set_state("listening", "Jarvis Mode Active")
+            else:
+                self.overlay_widget.set_state("idle", "Push-To-Talk Mode")
+
+    @pyqtSlot(bytes)
+    def _on_jarvis_speech_chunk(self, wav_bytes: bytes) -> None:
+        if QThread.currentThread() != self.thread():
+            QMetaObject.invokeMethod(self, "_on_jarvis_speech_chunk", Qt.ConnectionType.QueuedConnection, pyqtSlot(bytes)(wav_bytes))
+            return
+        if wav_bytes and len(wav_bytes) > 44:
+            self._process_dictation_pipeline(wav_bytes)
 
     def _check_single_instance(self) -> bool:
         """
@@ -170,6 +216,8 @@ class FluidVoiceApp(QObject):
                 on_keydown=self.start_recording,
                 on_keyup=self.stop_recording,
             )
+        self.hotkey_engine.add_hotkey("Ctrl+Alt+C", on_keydown=self.learn_from_clipboard)
+        self.hotkey_engine.add_hotkey("Alt+Shift+J", on_keydown=self.toggle_jarvis_mode)
         if not self.hotkey_engine.is_running:
             self.hotkey_engine.start()
 
@@ -305,6 +353,7 @@ class FluidVoiceApp(QObject):
             t_stt_start = time.perf_counter()
             print(f"[STAGE 1 STT] 📡 Transcribing {len(audio_bytes)} bytes audio via Groq Whisper-v3...")
             raw_text = self.stt_client.transcribe(audio_bytes, sample_rate=sample_rate)
+            self._last_raw_transcript = raw_text or ""
 
             t_stt_done = time.perf_counter()
             stt_latency_ms = (t_stt_done - t_stt_start) * 1000.0
@@ -319,18 +368,23 @@ class FluidVoiceApp(QObject):
             processed_text = self.post_processor.process_with_groq_llm(
                 raw_text, api_key=api_key, context=self._current_context, memory_engine=self.memory_engine
             )
+            cleaned_text, action = parse_spoken_action(processed_text)
+            self._last_transcript = cleaned_text or processed_text or ""
             t_llm_done = time.perf_counter()
             llm_latency_ms = (t_llm_done - t_llm_start) * 1000.0
-            print(f"[STAGE 2 FINAL TEXT] ({llm_latency_ms:.1f} ms): '{processed_text}'")
+            print(f"[STAGE 2 FINAL TEXT] ({llm_latency_ms:.1f} ms): '{cleaned_text}' (Action: {action})")
 
-            if processed_text and processed_text.strip():
+            if (cleaned_text and cleaned_text.strip()) or action:
                 if self.overlay_widget:
                     self.overlay_widget.set_state("pasted", "Pasted!")
                 self.set_state(AppState.PASTING, "Pasted!")
 
                 t_paste_start = time.perf_counter()
                 if self.config_manager.data.auto_paste and self.paster_engine:
-                    self.paster_engine.paste_text(processed_text, target_hwnd=self._target_hwnd)
+                    if action:
+                        self.paster_engine.paste_text_and_execute_action(cleaned_text, action=action, target_hwnd=self._target_hwnd)
+                    else:
+                        self.paster_engine.paste_text(cleaned_text, target_hwnd=self._target_hwnd)
                 t_paste_done = time.perf_counter()
                 paste_latency_ms = (t_paste_done - t_paste_start) * 1000.0
 
@@ -355,6 +409,48 @@ class FluidVoiceApp(QObject):
             if hasattr(self, "sfx_engine") and self.sfx_engine:
                 self.sfx_engine.play("error")
             self._handle_pipeline_error(err)
+
+    @pyqtSlot()
+    def learn_from_clipboard(self, corrected_text: Optional[str] = None) -> Optional[MemoryItem]:
+        """
+        Captures active clipboard text upon Ctrl+Alt+C hotkey press and executes
+        word-level token diffing against self._last_raw_transcript to learn terms.
+        """
+        if QThread.currentThread() != self.thread():
+            QMetaObject.invokeMethod(self, "learn_from_clipboard", Qt.ConnectionType.QueuedConnection)
+            return None
+
+        if corrected_text is None:
+            try:
+                clipboard = self.qt_app.clipboard()
+                corrected_text = clipboard.text() if clipboard else ""
+            except Exception as e:
+                logger.warning(f"Failed to read clipboard text: {e}")
+                corrected_text = ""
+
+        if not corrected_text or not corrected_text.strip():
+            logger.warning("Clipboard is empty or contains no text for correction learning.")
+            return None
+
+        spoken_text = getattr(self, "_last_raw_transcript", "") or getattr(self, "_last_transcript", "")
+        if not spoken_text:
+            logger.warning("No previous transcript available to compare with correction.")
+            return None
+
+        if not self.memory_engine:
+            self.memory_engine = MemoryEngine(filepath=self.config_manager.config_dir / "user_memory.json")
+
+        item = self.memory_engine.learn_from_correction(
+            spoken_text=spoken_text,
+            corrected_term=corrected_text,
+            context=self._current_context,
+        )
+
+        if item and self.post_processor:
+            self.post_processor.update_brand_map(self.memory_engine.get_phonetic_mappings())
+
+        logger.info(f"Learned correction from clipboard: '{spoken_text}' -> '{corrected_text}'")
+        return item
 
     def _handle_pipeline_error(self, err: Exception) -> None:
         err_msg = str(err)

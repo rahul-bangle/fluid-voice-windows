@@ -92,3 +92,54 @@ def test_app_lockfile_fallback(qapp, tmp_path):
 
     app.quit()
     assert not (tmp_path / "app.lock").exists()
+
+
+def test_app_ctrl_alt_c_correction_capture_diffing(qapp, tmp_path):
+    """Milestone 2: Verifies Ctrl+Alt+C clipboard correction capture and difflib token diffing in FluidVoiceApp."""
+    mutex_name = f"Global\\Test_FluidVoice_Mutex_Correction_{uuid.uuid4().hex}"
+    app = FluidVoiceApp(config_dir=tmp_path, mutex_name=mutex_name)
+    app.initialize()
+
+    # Simulate raw transcript from STT
+    app._last_raw_transcript = "mera grock code"
+
+    # Learn from correction text
+    item = app.learn_from_clipboard(corrected_text="mera Groq code")
+
+    assert item is not None
+    assert item.term == "Groq"
+    assert "grock" in item.phonetic_variants
+    assert len(item.metaphone_keys) > 0
+    assert item.auto_learned is True
+
+    # Verify post processor brand map update
+    if app.post_processor:
+        assert app.post_processor.BRAND_MAP.get("grock") == "Groq"
+
+    app.quit()
+
+
+def test_app_alt_shift_j_mode_toggle(qapp, tmp_path):
+    """R3: Verifies Alt+Shift+J toggle between Push-To-Talk and Jarvis Hands-Free Mode in FluidVoiceApp."""
+    mutex_name = f"Global\\Test_FluidVoice_Mutex_Jarvis_{uuid.uuid4().hex}"
+    app = FluidVoiceApp(config_dir=tmp_path, mutex_name=mutex_name)
+    app.initialize()
+
+    assert app.is_jarvis_mode is False
+
+    if app.audio_recorder:
+        app.audio_recorder.start_recording = MagicMock(return_value=True)
+
+    app.toggle_jarvis_mode()
+    assert app.is_jarvis_mode is True
+    if app.audio_recorder:
+        assert app.audio_recorder.is_jarvis_mode is True
+
+    app.toggle_jarvis_mode()
+    assert app.is_jarvis_mode is False
+    if app.audio_recorder:
+        assert app.audio_recorder.is_jarvis_mode is False
+
+    app.quit()
+
+

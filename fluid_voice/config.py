@@ -37,6 +37,66 @@ DEFAULT_ENGLISH_PROMPT = (
 DEFAULT_HINGLISH_PROMPT = DEFAULT_ENGLISH_PROMPT
 
 
+class Top8PromptRanker:
+    """
+    Context-Aware Top-8 Prompt Ranker.
+    Selects up to 8 top relevant memory terms from MemoryEngine and formats the prompt payload,
+    enforcing a strict <150 token cap.
+    """
+
+    MAX_TOKENS = 145  # Enforces strict <150 token limit
+
+    @classmethod
+    def estimate_tokens(cls, text: str) -> int:
+        """Estimates token count for prompt string (approx 1.3 tokens per word)."""
+        if not text:
+            return 0
+        words = text.strip().split()
+        return int(len(words) * 1.3) + 1
+
+    @classmethod
+    def rank_and_build_prompt(
+        cls,
+        base_prompt: str = DEFAULT_HINGLISH_PROMPT,
+        memory_engine: Optional[Any] = None,
+        context: Optional[Any] = None,
+        terms: Optional[List[str]] = None,
+    ) -> str:
+        """
+        Ranks top relevant memory terms (up to 8) and builds prompt strictly capped under 150 tokens.
+        """
+        selected_terms: List[str] = []
+
+        if terms is not None:
+            selected_terms = [str(t) for t in terms if t][:8]
+        elif memory_engine is not None:
+            try:
+                memories = memory_engine.get_relevant_memories(context=context, limit=8)
+                for item in memories:
+                    t = getattr(item, "term", str(item))
+                    if t and t not in selected_terms:
+                        selected_terms.append(str(t))
+                selected_terms = selected_terms[:8]
+            except Exception as e:
+                logger.warning(f"Top8PromptRanker failed to fetch memories: {e}")
+
+        if not selected_terms:
+            if cls.estimate_tokens(base_prompt) > cls.MAX_TOKENS:
+                words = base_prompt.split()
+                while words and cls.estimate_tokens(" ".join(words)) > cls.MAX_TOKENS:
+                    words.pop()
+                return " ".join(words)
+            return base_prompt
+
+        while selected_terms:
+            prompt_candidate = f"{base_prompt} Relevant terms: {', '.join(selected_terms)}"
+            if cls.estimate_tokens(prompt_candidate) <= cls.MAX_TOKENS:
+                return prompt_candidate
+            selected_terms.pop()
+
+        return base_prompt
+
+
 @dataclass
 class ConfigData:
     """Application configuration schema with defaults."""

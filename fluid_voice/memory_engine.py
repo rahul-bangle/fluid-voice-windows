@@ -6,6 +6,7 @@ Manages user memory terms, jargon, brand names, and phonetic mappings with threa
 atomic persistence, multi-factor RAG retrieval, token budget capping, and auto-learning.
 """
 
+import difflib
 import json
 import logging
 import math
@@ -20,8 +21,75 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fluid_voice.config import get_app_data_dir
+from fluid_voice.post_processor import double_metaphone
 
 logger = logging.getLogger(__name__)
+
+
+def compute_metaphone_keys(term: str) -> List[str]:
+    """Computes unique non-empty primary and secondary Double Metaphone keys for a term."""
+    if not term or not term.strip():
+        return []
+    keys = []
+    words = term.strip().split()
+    for w in words:
+        p, s = double_metaphone(w)
+        if p and p not in keys:
+            keys.append(p)
+        if s and s not in keys:
+            keys.append(s)
+    return keys
+
+
+def diff_tokens(spoken_text: str, corrected_text: str) -> List[Tuple[str, str]]:
+    """
+    Word-level token diffing using difflib.
+    Compares spoken_text against corrected_text and isolates
+    removed (-) tokens as spoken variants and added (+) tokens as canonical corrections.
+    Returns a list of (spoken_variant, canonical_term) tuples.
+    """
+    if not spoken_text or not corrected_text:
+        return []
+
+    spoken_words = spoken_text.strip().split()
+    corrected_words = corrected_text.strip().split()
+
+    if not spoken_words or not corrected_words:
+        return []
+
+    # Use difflib.Differ and SequenceMatcher for exact token range isolation
+    differ = difflib.Differ()
+    _ = list(differ.compare(spoken_words, corrected_words))
+
+    matcher = difflib.SequenceMatcher(None, spoken_words, corrected_words, autojunk=False)
+    opcodes = matcher.get_opcodes()
+
+    pairs = []
+    i = 0
+    while i < len(opcodes):
+        tag, i1, i2, j1, j2 = opcodes[i]
+        if tag == "replace":
+            spk = " ".join(spoken_words[i1:i2]).strip(".,!?;:\"'()[]{}")
+            cor = " ".join(corrected_words[j1:j2]).strip(".,!?;:\"'()[]{}")
+            if spk and cor and spk.lower() != cor.lower():
+                pairs.append((spk, cor))
+        elif tag == "delete" and i + 1 < len(opcodes) and opcodes[i + 1][0] == "insert":
+            _, ni1, ni2, _, _ = opcodes[i]
+            _, _, _, nj1, nj2 = opcodes[i + 1]
+            spk = " ".join(spoken_words[ni1:ni2]).strip(".,!?;:\"'()[]{}")
+            cor = " ".join(corrected_words[nj1:nj2]).strip(".,!?;:\"'()[]{}")
+            if spk and cor and spk.lower() != cor.lower():
+                pairs.append((spk, cor))
+            i += 1
+        i += 1
+
+    if not pairs and spoken_text.strip().lower() != corrected_text.strip().lower():
+        spk = spoken_text.strip().strip(".,!?;:\"'()[]{}")
+        cor = corrected_text.strip().strip(".,!?;:\"'()[]{}")
+        if spk and cor and spk.lower() != cor.lower():
+            pairs.append((spk, cor))
+
+    return pairs
 
 
 class MemoryCategory(str, Enum):
@@ -40,6 +108,7 @@ class MemoryItem:
     term: str
     category: MemoryCategory | str = MemoryCategory.CUSTOM
     phonetic_variants: List[str] = field(default_factory=list)
+    metaphone_keys: List[str] = field(default_factory=list)
     context_tags: List[str] = field(default_factory=list)
     usage_count: int = 0
     created_at: float = field(default_factory=time.time)
@@ -62,6 +131,7 @@ class MemoryItem:
             "term": self.term,
             "category": cat_val,
             "phonetic_variants": list(self.phonetic_variants),
+            "metaphone_keys": list(self.metaphone_keys),
             "context_tags": list(self.context_tags),
             "usage_count": self.usage_count,
             "created_at": self.created_at,
@@ -88,12 +158,14 @@ class MemoryItem:
             term=str(data["term"]),
             category=category,
             phonetic_variants=list(data.get("phonetic_variants", [])),
+            metaphone_keys=list(data.get("metaphone_keys", [])),
             context_tags=list(data.get("context_tags", [])),
             usage_count=int(data.get("usage_count", 0)),
             created_at=float(data.get("created_at", time.time())),
             last_used=float(last_used_val),
             auto_learned=bool(data.get("auto_learned", False)),
         )
+
 
 
 class MemoryStore:
@@ -297,6 +369,7 @@ class MemoryEngine:
         term: str,
         category: MemoryCategory | str = MemoryCategory.CUSTOM,
         phonetic_variants: Optional[List[str]] = None,
+        metaphone_keys: Optional[List[str]] = None,
         context_tags: Optional[List[str]] = None,
         usage_count: int = 0,
         auto_learned: bool = False,
@@ -310,13 +383,22 @@ class MemoryEngine:
             variants = [v.strip() for v in (phonetic_variants or []) if v.strip()]
             tags = [t.strip() for t in (context_tags or []) if t.strip()]
 
-            # Check if term already exists (case-insensitive)
+            computed_metaphones = set(metaphone_keys or [])
+            if not computed_metaphones:
+                for mk in compute_metaphone_keys(term_clean):
+                    computed_metaphones.add(mk)
+                for v in variants:
+                    for mk in compute_metaphone_keys(v):
+                        computed_metaphones.add(mk)
+
             existing = self._term_lookup.get(term_clean.lower())
             if existing:
-                # Merge variants & tags
                 for v in variants:
                     if v not in existing.phonetic_variants:
                         existing.phonetic_variants.append(v)
+                for mk in computed_metaphones:
+                    if mk not in existing.metaphone_keys:
+                        existing.metaphone_keys.append(mk)
                 for t in tags:
                     if t not in existing.context_tags:
                         existing.context_tags.append(t)
@@ -328,6 +410,7 @@ class MemoryEngine:
                     term=term_clean,
                     category=category,
                     phonetic_variants=variants,
+                    metaphone_keys=list(computed_metaphones),
                     context_tags=tags,
                     usage_count=usage_count,
                     created_at=time.time(),
@@ -336,7 +419,6 @@ class MemoryEngine:
                 )
                 self.store.items[item.id] = item
 
-            # Update store mappings
             for v in item.phonetic_variants:
                 self.store.phonetic_mappings[v.lower()] = item.term
 
@@ -585,8 +667,8 @@ class MemoryEngine:
         context: Optional[Any] = None,
     ) -> Optional[MemoryItem]:
         """
-        Auto-learning mechanism.
-        Learns from user correction by binding spoken_text as a phonetic variant of corrected_term.
+        Auto-learning mechanism using word-level difflib.Differ token diffing.
+        Computes primary and secondary Double Metaphone keys and persists to user_memory.json.
         """
         with self._lock:
             spoken_clean = spoken_text.strip()
@@ -595,52 +677,80 @@ class MemoryEngine:
             if not spoken_clean or not corrected_clean:
                 return None
 
-            spoken_lower = spoken_clean.lower()
-            existing = self._term_lookup.get(corrected_clean.lower())
+            pairs = diff_tokens(spoken_clean, corrected_clean)
+            if not pairs:
+                if spoken_clean.lower() != corrected_clean.lower():
+                    pairs = [(spoken_clean, corrected_clean)]
+                else:
+                    pairs = [(corrected_clean, corrected_clean)]
 
-            if existing:
-                if spoken_lower != corrected_clean.lower() and spoken_clean not in existing.phonetic_variants:
-                    existing.phonetic_variants.append(spoken_clean)
-                existing.usage_count += 1
-                existing.last_used = time.time()
-                existing.auto_learned = True
+            last_item = None
+            for spoken_variant, canonical in pairs:
+                can_clean = canonical.strip()
+                var_clean = spoken_variant.strip()
+                if not can_clean:
+                    continue
 
-                if context is not None:
-                    app_cat = getattr(context, "app_category", None)
-                    if app_cat is not None:
-                        cat_str = app_cat.value if hasattr(app_cat, "value") else str(app_cat)
-                        if cat_str not in existing.context_tags:
-                            existing.context_tags.append(cat_str)
+                var_lower = var_clean.lower()
+                can_lower = can_clean.lower()
 
-                item = existing
-            else:
-                variants = [spoken_clean] if spoken_lower != corrected_clean.lower() else []
-                tags = []
-                if context is not None:
-                    app_cat = getattr(context, "app_category", None)
-                    if app_cat is not None:
-                        cat_str = app_cat.value if hasattr(app_cat, "value") else str(app_cat)
-                        tags.append(cat_str)
+                existing = self._term_lookup.get(can_lower)
 
-                item = MemoryItem(
-                    term=corrected_clean,
-                    category=MemoryCategory.JARGON,
-                    phonetic_variants=variants,
-                    context_tags=tags,
-                    usage_count=1,
-                    created_at=time.time(),
-                    last_used=time.time(),
-                    auto_learned=True,
-                )
-                self.store.items[item.id] = item
+                meta_keys = set()
+                for mk in compute_metaphone_keys(can_clean):
+                    meta_keys.add(mk)
+                if var_clean and var_lower != can_lower:
+                    for mk in compute_metaphone_keys(var_clean):
+                        meta_keys.add(mk)
 
-            # Update store mappings
-            for v in item.phonetic_variants:
-                self.store.phonetic_mappings[v.lower()] = item.term
+                if existing:
+                    if var_lower != can_lower and var_clean not in existing.phonetic_variants:
+                        existing.phonetic_variants.append(var_clean)
+                    for mk in meta_keys:
+                        if mk not in existing.metaphone_keys:
+                            existing.metaphone_keys.append(mk)
+                    existing.usage_count += 1
+                    existing.last_used = time.time()
+                    existing.auto_learned = True
+
+                    if context is not None:
+                        app_cat = getattr(context, "app_category", None)
+                        if app_cat is not None:
+                            cat_str = app_cat.value if hasattr(app_cat, "value") else str(app_cat)
+                            if cat_str not in existing.context_tags:
+                                existing.context_tags.append(cat_str)
+
+                    item = existing
+                else:
+                    variants = [var_clean] if var_lower != can_lower else []
+                    tags = []
+                    if context is not None:
+                        app_cat = getattr(context, "app_category", None)
+                        if app_cat is not None:
+                            cat_str = app_cat.value if hasattr(app_cat, "value") else str(app_cat)
+                            tags.append(cat_str)
+
+                    item = MemoryItem(
+                        term=can_clean,
+                        category=MemoryCategory.JARGON,
+                        phonetic_variants=variants,
+                        metaphone_keys=list(meta_keys),
+                        context_tags=tags,
+                        usage_count=1,
+                        created_at=time.time(),
+                        last_used=time.time(),
+                        auto_learned=True,
+                    )
+                    self.store.items[item.id] = item
+
+                for v in item.phonetic_variants:
+                    self.store.phonetic_mappings[v.lower()] = item.term
+
+                last_item = item
 
             self.store.save()
             self._rebuild_indexes()
-            return item
+            return last_item
 
     def build_stt_vocab_prompt(
         self,

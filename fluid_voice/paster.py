@@ -238,3 +238,52 @@ class AutoPaster:
         logger.info(f"Auto-pasted text '{text[:30]}...' in {elapsed_ms:.2f}ms")
 
         return pasted
+
+    def execute_action(self, action: str = "VK_RETURN") -> bool:
+        """Executes a Win32 key action like VK_RETURN (0x0D)."""
+        if action == "VK_RETURN" or action == 0x0D:
+            if HAS_WIN32 and win32api:
+                try:
+                    VK_RETURN = 0x0D
+                    KEYEVENTF_KEYUP = 0x0002
+                    win32api.keybd_event(VK_RETURN, 0, 0, 0)
+                    win32api.keybd_event(VK_RETURN, 0, KEYEVENTF_KEYUP, 0)
+                    return True
+                except Exception as e:
+                    logger.warning(f"Win32 keybd_event VK_RETURN execution failed: {e}")
+            if pyautogui and HAS_PYAUTOGUI:
+                try:
+                    pyautogui.press("enter")
+                    return True
+                except Exception as e:
+                    logger.warning(f"pyautogui enter press failed: {e}")
+            try:
+                from pynput.keyboard import Controller, Key
+                kb = Controller()
+                kb.press(Key.enter)
+                kb.release(Key.enter)
+                return True
+            except Exception as e:
+                logger.error(f"Action execution failed: {e}")
+                return False
+        return False
+
+    def paste_text_and_execute_action(self, text: str, action: str = "VK_RETURN", target_hwnd: Optional[int] = None) -> bool:
+        """
+        Injects text via Ctrl+V, sleeps 120ms (time.sleep(0.120)), then fires Win32 keybd_event VK_RETURN (0x0D).
+        """
+        pasted = False
+        if text and text.strip():
+            pasted = self.paste_text(text, target_hwnd=target_hwnd)
+        if action:
+            time.sleep(0.120)
+            self.execute_action(action)
+            return True
+        return pasted
+
+
+def paste_text_and_execute_action(text: str, action: str = "VK_RETURN", target_hwnd: Optional[int] = None) -> bool:
+    """Module-level wrapper for AutoPaster.paste_text_and_execute_action."""
+    paster = AutoPaster()
+    return paster.paste_text_and_execute_action(text, action=action, target_hwnd=target_hwnd)
+

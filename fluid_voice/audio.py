@@ -21,6 +21,7 @@ class AudioRecorder(QObject):
     recording_started = pyqtSignal()
     recording_stopped = pyqtSignal(str)  # reason: "manual", "vad_silence", "max_duration", "initial_silence"
     audio_level_changed = pyqtSignal(float)  # 0.0 to 1.0 for overlay widget
+    speech_chunk_emitted = pyqtSignal(bytes)
     error_occurred = pyqtSignal(str)
 
     def __init__(
@@ -31,6 +32,7 @@ class AudioRecorder(QObject):
         speech_threshold_rms: float = 300.0,
         silence_duration_sec: float = 1.2,
         max_duration_sec: float = 30.0,
+        is_jarvis_mode: bool = False,
         device: Optional[int] = None,
         parent: Optional[QObject] = None,
     ):
@@ -41,7 +43,11 @@ class AudioRecorder(QObject):
         self._speech_threshold = speech_threshold_rms
         self._silence_duration_sec = silence_duration_sec
         self._max_duration_sec = max_duration_sec
+        self.is_jarvis_mode = is_jarvis_mode
         self._device = device
+
+        self.noise_rms: float = 50.0
+        self.adaptive_silence_threshold: float = max(150.0, self.noise_rms * 1.5)
 
         self._stream: Optional[sd.InputStream] = None
         self._is_recording = False
@@ -55,6 +61,9 @@ class AudioRecorder(QObject):
         self._initial_silence_samples_count = 0
         self._speech_samples_count = 0
         self._stop_reason = "manual"
+
+    def set_jarvis_mode(self, enabled: bool) -> None:
+        self.is_jarvis_mode = enabled
 
     def start_recording(self) -> bool:
         if self._is_recording:
@@ -151,12 +160,20 @@ class AudioRecorder(QObject):
         samples = chunk.flatten().astype(np.float32)
         rms = float(np.sqrt(np.mean(samples ** 2))) if len(samples) > 0 else 0.0
 
+        # Dynamic rolling ambient noise floor & adaptive silence threshold calculation
+        if not self._speech_detected:
+            self.noise_rms = 0.95 * self.noise_rms + 0.05 * rms
+            self.adaptive_silence_threshold = max(150.0, self.noise_rms * 1.5)
+
+        silence_thresh = self.adaptive_silence_threshold if self.is_jarvis_mode else self._silence_threshold
+        silence_dur = 0.8 if self.is_jarvis_mode else self._silence_duration_sec
+
         # Emit audio level normalized (0.0 to 1.0)
         norm_level = min(1.0, max(0.0, rms / 3000.0))
         self.audio_level_changed.emit(norm_level)
 
-        # 1. Max duration check
-        if self._total_samples >= self._max_samples:
+        # 1. Max duration check (only active in non-Jarvis mode)
+        if not self.is_jarvis_mode and self._total_samples >= self._max_samples:
             self._stop_reason = "max_duration"
             self._is_recording = False
             return
@@ -168,21 +185,31 @@ class AudioRecorder(QObject):
                 self._speech_samples_count += frames
             else:
                 self._initial_silence_samples_count += frames
-                # If no speech detected for > 5 seconds, auto-stop
-                if self._initial_silence_samples_count >= int(self._sample_rate * 5.0):
+                # If no speech detected for > 5 seconds in non-Jarvis mode, auto-stop
+                if not self.is_jarvis_mode and self._initial_silence_samples_count >= int(self._sample_rate * 5.0):
                     self._stop_reason = "initial_silence"
                     self._is_recording = False
         else:
             self._speech_samples_count += frames
-            if rms < self._silence_threshold:
+            if rms < silence_thresh:
                 self._silence_samples_count += frames
-                # Check if silence sustained for required duration (e.g. 1.2s)
+                # Check if silence sustained for required duration (0.8s in Jarvis mode, 1.2s in standard)
                 if (
-                    self._silence_samples_count >= int(self._sample_rate * self._silence_duration_sec)
+                    self._silence_samples_count >= int(self._sample_rate * silence_dur)
                     and self._speech_samples_count >= int(self._sample_rate * 0.4)
                 ):
-                    self._stop_reason = "vad_silence"
-                    self._is_recording = False
+                    if self.is_jarvis_mode:
+                        wav_bytes = self._encode_wav(self._pcm_chunks)
+                        self.speech_chunk_emitted.emit(wav_bytes)
+                        self._pcm_chunks = []
+                        self._total_samples = 0
+                        self._speech_detected = False
+                        self._silence_samples_count = 0
+                        self._initial_silence_samples_count = 0
+                        self._speech_samples_count = 0
+                    else:
+                        self._stop_reason = "vad_silence"
+                        self._is_recording = False
             else:
                 self._silence_samples_count = 0
 

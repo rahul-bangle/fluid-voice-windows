@@ -6,7 +6,407 @@ Zero external dependencies, fast execution for live dictation.
 """
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Set
+
+
+def double_metaphone(word: str) -> Tuple[str, str]:
+    """
+    Pure Python Double Metaphone algorithm.
+    Returns a tuple of (primary_code, secondary_code).
+    """
+    if not word:
+        return ("", "")
+
+    s = "".join(c for c in word.upper() if c.isalpha())
+    if not s:
+        return ("", "")
+
+    length = len(s)
+    primary = []
+    secondary = []
+    current = 0
+
+    if s.startswith(("GN", "KN", "PN", "WR", "PS")):
+        current += 1
+
+    if s.startswith("X"):
+        primary.append("S")
+        secondary.append("S")
+        current += 1
+
+    while current < length and (len(primary) < 4 or len(secondary) < 4):
+        ch = s[current]
+
+        if ch in "AEIOUY":
+            if current == 0:
+                primary.append("A")
+                secondary.append("A")
+            current += 1
+        elif ch == "B":
+            primary.append("P")
+            secondary.append("P")
+            current += 2 if (current + 1 < length and s[current + 1] == "B") else 1
+        elif ch == "C":
+            if current + 1 < length and s[current + 1] == "H":
+                if current > 0 and s[current - 1] in "AEIOUY" and (current + 2 >= length or s[current + 2] not in "AEIOUY"):
+                    primary.append("K")
+                    secondary.append("K")
+                else:
+                    primary.append("X")
+                    secondary.append("X")
+                current += 2
+            elif current + 1 < length and s[current + 1] in "IEY":
+                primary.append("S")
+                secondary.append("S")
+                current += 2
+            elif current + 1 < length and s[current + 1] == "K":
+                primary.append("K")
+                secondary.append("K")
+                current += 2
+            elif current + 1 < length and s[current + 1] == "C":
+                primary.append("K")
+                secondary.append("S")
+                current += 2
+            else:
+                primary.append("K")
+                secondary.append("K")
+                current += 1
+        elif ch == "D":
+            if current + 1 < length and s[current + 1] == "G":
+                if current + 2 < length and s[current + 2] in "IEY":
+                    primary.append("J")
+                    secondary.append("J")
+                    current += 3
+                else:
+                    primary.append("TK")
+                    secondary.append("TK")
+                    current += 2
+            else:
+                primary.append("T")
+                secondary.append("T")
+                current += 2 if (current + 1 < length and s[current + 1] in "DT") else 1
+        elif ch in "F":
+            primary.append("F")
+            secondary.append("F")
+            current += 2 if (current + 1 < length and s[current + 1] == "F") else 1
+        elif ch == "G":
+            if current + 1 < length and s[current + 1] == "H":
+                if current > 0 and s[current - 1] not in "AEIOUY":
+                    primary.append("K")
+                    secondary.append("K")
+                current += 2
+            elif current + 1 < length and s[current + 1] == "N":
+                primary.append("N")
+                secondary.append("N")
+                current += 2
+            elif current + 1 < length and s[current + 1] in "IEY":
+                primary.append("J")
+                secondary.append("K")
+                current += 2
+            else:
+                primary.append("K")
+                secondary.append("K")
+                current += 2 if (current + 1 < length and s[current + 1] == "G") else 1
+        elif ch == "H":
+            if (current == 0 or s[current - 1] in "AEIOUY") and current + 1 < length and s[current + 1] in "AEIOUY":
+                primary.append("H")
+                secondary.append("H")
+            current += 1
+        elif ch == "J":
+            primary.append("J")
+            secondary.append("H")
+            current += 2 if (current + 1 < length and s[current + 1] == "J") else 1
+        elif ch == "K":
+            primary.append("K")
+            secondary.append("K")
+            current += 2 if (current + 1 < length and s[current + 1] == "K") else 1
+        elif ch == "L":
+            primary.append("L")
+            secondary.append("L")
+            current += 2 if (current + 1 < length and s[current + 1] == "L") else 1
+        elif ch == "M":
+            primary.append("M")
+            secondary.append("M")
+            current += 2 if (current + 1 < length and s[current + 1] == "M") else 1
+        elif ch == "N":
+            primary.append("N")
+            secondary.append("N")
+            current += 2 if (current + 1 < length and s[current + 1] == "N") else 1
+        elif ch == "P":
+            if current + 1 < length and s[current + 1] == "H":
+                primary.append("F")
+                secondary.append("F")
+                current += 2
+            else:
+                primary.append("P")
+                secondary.append("P")
+                current += 2 if (current + 1 < length and s[current + 1] == "P") else 1
+        elif ch == "Q":
+            primary.append("K")
+            secondary.append("K")
+            current += 2 if (current + 1 < length and s[current + 1] == "Q") else 1
+        elif ch == "R":
+            primary.append("R")
+            secondary.append("R")
+            current += 2 if (current + 1 < length and s[current + 1] == "R") else 1
+        elif ch == "S":
+            if current + 1 < length and s[current + 1] == "H":
+                primary.append("X")
+                secondary.append("X")
+                current += 2
+            elif current + 1 < length and s[current + 1] in "Z":
+                primary.append("S")
+                secondary.append("S")
+                current += 2
+            else:
+                primary.append("S")
+                secondary.append("S")
+                current += 1
+        elif ch == "T":
+            if current + 1 < length and s[current + 1] == "H":
+                primary.append("0")
+                secondary.append("T")
+                current += 2
+            elif current + 1 < length and s[current + 1] in "IO" and current + 2 < length and s[current + 2] in "AEIOU":
+                primary.append("X")
+                secondary.append("X")
+                current += 2
+            else:
+                primary.append("T")
+                secondary.append("T")
+                current += 2 if (current + 1 < length and s[current + 1] in "TT") else 1
+        elif ch == "V":
+            primary.append("F")
+            secondary.append("F")
+            current += 2 if (current + 1 < length and s[current + 1] == "V") else 1
+        elif ch == "W":
+            if current + 1 < length and s[current + 1] in "AEIOUY":
+                primary.append("W")
+                secondary.append("F")
+            current += 1
+        elif ch == "X":
+            primary.append("KS")
+            secondary.append("KS")
+            current += 2 if (current + 1 < length and s[current + 1] == "X") else 1
+        elif ch == "Y":
+            if current + 1 < length and s[current + 1] in "AEIOU":
+                primary.append("Y")
+                secondary.append("Y")
+            current += 1
+        elif ch == "Z":
+            primary.append("S")
+            secondary.append("S")
+            current += 2 if (current + 1 < length and s[current + 1] == "Z") else 1
+        else:
+            current += 1
+
+    p_str = "".join(primary)[:4]
+    s_str = "".join(secondary)[:4]
+    return (p_str, s_str)
+
+
+def jaro_winkler_distance(s1: str, s2: str, p: float = 0.1) -> float:
+    """
+    Calculates Jaro-Winkler similarity distance between two strings.
+    Returns float between 0.0 and 1.0.
+    """
+    if s1 == s2:
+        return 1.0
+    if not s1 or not s2:
+        return 0.0
+
+    len1, len2 = len(s1), len(s2)
+    match_distance = max(len1, len2) // 2 - 1
+    if match_distance < 0:
+        match_distance = 0
+
+    s1_matches = [False] * len1
+    s2_matches = [False] * len2
+
+    matches = 0
+    transpositions = 0
+
+    for i in range(len1):
+        start = max(0, i - match_distance)
+        end = min(i + match_distance + 1, len2)
+        for j in range(start, end):
+            if s2_matches[j]:
+                continue
+            if s1[i] != s2[j]:
+                continue
+            s1_matches[i] = True
+            s2_matches[j] = True
+            matches += 1
+            break
+
+    if matches == 0:
+        return 0.0
+
+    k = 0
+    for i in range(len1):
+        if not s1_matches[i]:
+            continue
+        while not s2_matches[k]:
+            k += 1
+        if s1[i] != s2[k]:
+            transpositions += 1
+        k += 1
+
+    jaro = (matches / len1 + matches / len2 + (matches - transpositions / 2.0) / matches) / 3.0
+
+    prefix_len = 0
+    for i in range(min(4, len1, len2)):
+        if s1[i] == s2[i]:
+            prefix_len += 1
+        else:
+            break
+
+    return jaro + prefix_len * p * (1.0 - jaro)
+
+
+def _get_metaphone_set(word: str) -> Set[str]:
+    """Helper to extract non-empty metaphone keys for a word."""
+    if not word:
+        return set()
+    p, s = double_metaphone(word)
+    # Empty string set filtering: set() - {""}
+    res = {p, s} - {""}
+    return res
+
+
+def resolve_phonetic_mishears(text: str, lexicon_map: Optional[Dict[str, str]] = None) -> str:
+    """
+    Phonetic mishear resolution using Double Metaphone and Jaro-Winkler distance.
+    Filters out empty string metaphone codes (`set() - {""}`).
+    Preserves attached leading/trailing punctuation (e.g. "pie cut," -> "PyQt6,").
+    """
+    if not text or not text.strip():
+        return text
+
+    if lexicon_map is None:
+        lexicon_map = HinglishPostProcessor.BRAND_MAP
+
+    # Ensure default target terms exist in search dictionary
+    full_lexicon = dict(lexicon_map)
+    full_lexicon.setdefault("pie cut", "PyQt6")
+    full_lexicon.setdefault("graph kewl", "GraphQL")
+    full_lexicon.setdefault("graphql", "GraphQL")
+
+    tokens = text.split()
+    if not tokens:
+        return text
+
+    def split_punct(token: str) -> Tuple[str, str, str]:
+        match = re.match(r"^(\W*)(.*?)(\W*)$", token)
+        if match:
+            return match.group(1), match.group(2), match.group(3)
+        return "", token, ""
+
+    i = 0
+    new_tokens = []
+    while i < len(tokens):
+        # 1. Try 2-word n-gram match first
+        if i + 1 < len(tokens):
+            lead1, core1, trail1 = split_punct(tokens[i])
+            lead2, core2, trail2 = split_punct(tokens[i + 1])
+            phrase_clean = (core1 + " " + core2).strip().lower()
+            phrase_concat = (core1 + core2).strip().lower()
+
+            m1 = _get_metaphone_set(core1)
+            m2 = _get_metaphone_set(core2)
+            # Empty string set filtering: set() - {""}
+            phrase_meta = ({p1 + p2 for p1 in m1 for p2 in m2} | m1 | m2) - {""}
+
+            matched = False
+            for key, canonical in full_lexicon.items():
+                key_clean = "".join(c for c in key.lower() if c.isalnum())
+                can_clean = "".join(c for c in canonical.lower() if c.isalnum())
+                # Empty string set filtering: set() - {""}
+                target_meta = (_get_metaphone_set(key_clean) | _get_metaphone_set(can_clean)) - {""}
+
+                # Check metaphone intersection without empty strings
+                common_meta = (phrase_meta & target_meta) - {""}
+
+                jw_text = jaro_winkler_distance(phrase_concat, can_clean)
+                jw_key = jaro_winkler_distance(phrase_clean, key.lower())
+
+                if common_meta or jw_text >= 0.70 or jw_key >= 0.70 or phrase_clean == key.lower():
+                    # Preserving attached leading/trailing punctuation
+                    replacement = f"{lead1}{canonical}{trail2}"
+                    new_tokens.append(replacement)
+                    i += 2
+                    matched = True
+                    break
+            if matched:
+                continue
+
+        # 2. Try single word match
+        lead, core, trail = split_punct(tokens[i])
+        core_lower = core.lower()
+        if core:
+            word_meta = _get_metaphone_set(core) - {""}
+            matched = False
+            for key, canonical in full_lexicon.items():
+                if " " in key:
+                    continue
+                key_clean = "".join(c for c in key.lower() if c.isalnum())
+                can_clean = "".join(c for c in canonical.lower() if c.isalnum())
+                target_meta = (_get_metaphone_set(key_clean) | _get_metaphone_set(can_clean)) - {""}
+
+                common_meta = (word_meta & target_meta) - {""}
+                jw_text = jaro_winkler_distance(core_lower, can_clean)
+
+                if (common_meta and jw_text >= 0.65) or core_lower == key_clean:
+                    new_tokens.append(f"{lead}{canonical}{trail}")
+                    i += 1
+                    matched = True
+                    break
+            if matched:
+                continue
+
+        new_tokens.append(tokens[i])
+        i += 1
+
+    return " ".join(new_tokens)
+
+
+SPOKEN_ACTION_TRIGGERS = [
+    "jarvis send",
+    "jarvis enter",
+    "computer send",
+    "computer enter",
+]
+
+
+def parse_spoken_action(text: str) -> Tuple[str, Optional[str]]:
+    """
+    Parses spoken action commands like 'Jarvis send', 'Jarvis enter', 'computer enter', 'computer send'.
+    Returns a tuple of (cleaned_payload_text, action_name), where action_name is 'VK_RETURN' if found, else None.
+    """
+    if not text:
+        return ("", None)
+
+    raw_text = text.strip()
+    if not raw_text:
+        return ("", None)
+
+    matched_action = None
+    cleaned = raw_text
+
+    for trigger in SPOKEN_ACTION_TRIGGERS:
+        pattern = re.compile(rf"(?:^|[\s,.:;!])({trigger})(?:[\s,.:;!]|$)", re.IGNORECASE)
+        match = pattern.search(cleaned)
+        if match:
+            matched_action = "VK_RETURN"
+            cleaned = pattern.sub(" ", cleaned)
+            break
+
+    if matched_action is not None:
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        cleaned = re.sub(r"^[\s,.:;!]+|[\s,.:;!]+$", "", cleaned).strip()
+        return (cleaned, matched_action)
+
+    return (raw_text, None)
 
 
 class HinglishPostProcessor:
@@ -31,6 +431,7 @@ class HinglishPostProcessor:
         "whisper": "Whisper",
         "pyqt": "PyQt6",
         "pyqt6": "PyQt6",
+        "graphql": "GraphQL",
         "vscode": "VS Code",
         "vs code": "VS Code",
         "notepad": "Notepad",
@@ -267,6 +668,9 @@ class HinglishPostProcessor:
             return self.BRAND_MAP.get(word_key, match.group(0))
 
         text = self.re_brands.sub(replace_brand, text)
+
+        # Double Metaphone + Jaro-Winkler phonetic mishear resolution
+        text = resolve_phonetic_mishears(text, self.BRAND_MAP)
 
         text = self.re_vocab.sub(lambda m: self.HINGLISH_VOCAB_MAP.get(m.group(0).lower(), m.group(0)), text)
 

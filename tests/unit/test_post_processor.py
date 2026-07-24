@@ -7,7 +7,12 @@ Minimum 10 tests.
 
 import time
 import pytest
-from fluid_voice.post_processor import HinglishPostProcessor
+from fluid_voice.post_processor import (
+    HinglishPostProcessor,
+    double_metaphone,
+    jaro_winkler_distance,
+    resolve_phonetic_mishears,
+)
 
 
 @pytest.fixture
@@ -181,6 +186,71 @@ def test_post_processor_config_toggles():
 
     no_idioms = HinglishPostProcessor(config={"enable_idioms": False})
     assert "revert back" in no_idioms.process("revert back to me").lower()
+
+
+def test_post_processor_double_metaphone_algorithm():
+    """R1: Verifies pure Python Double Metaphone algorithm primary/secondary key generation."""
+    p1, s1 = double_metaphone("pie")
+    assert p1 == "P"
+    p2, s2 = double_metaphone("cut")
+    assert p2 == "KT"
+    p3, s3 = double_metaphone("pyqt6")
+    assert p3 == "PKT"
+
+
+def test_post_processor_jaro_winkler_distance():
+    """R1: Verifies Jaro-Winkler distance calculation."""
+    assert jaro_winkler_distance("hello", "hello") == 1.0
+    assert jaro_winkler_distance("", "test") == 0.0
+    assert jaro_winkler_distance("martha", "marhta") > 0.90
+
+
+def test_post_processor_double_metaphone_phonetic_mishear_resolution(processor: HinglishPostProcessor):
+    """R1: Resolves phonetic mishears like 'pie cut' -> 'PyQt6' and 'graph kewl' -> 'GraphQL'."""
+    assert "PyQt6" in processor.process("please install pie cut package")
+    assert "GraphQL" in processor.process("we are using graph kewl API")
+
+
+def test_post_processor_empty_string_metaphone_set_filtering():
+    """R1: Verifies empty string set filtering (set() - {""}) during Metaphone key matching."""
+    from fluid_voice.post_processor import _get_metaphone_set
+    assert "" not in _get_metaphone_set("")
+    assert "" not in _get_metaphone_set("   ")
+    res = resolve_phonetic_mishears("   ")
+    assert res == "   "
+
+
+def test_post_processor_punctuation_preserving_phonetic_replacement():
+    """R1: Verifies attached leading/trailing punctuation is preserved during phonetic resolution."""
+    raw1 = "have you tried pie cut, yesterday?"
+    res1 = resolve_phonetic_mishears(raw1)
+    assert "PyQt6," in res1
+
+    raw2 = "check out (graph kewl!) for queries."
+    res2 = resolve_phonetic_mishears(raw2)
+    assert "(GraphQL!)" in res2
+
+
+def test_post_processor_spoken_action_parser():
+    """R3: Verifies parse_spoken_action parses spoken action commands like 'Jarvis send' and 'computer enter'."""
+    from fluid_voice.post_processor import parse_spoken_action
+
+    text1, act1 = parse_spoken_action("Jarvis send please submit this form")
+    assert text1 == "please submit this form"
+    assert act1 == "VK_RETURN"
+
+    text2, act2 = parse_spoken_action("computer enter hello world")
+    assert text2 == "hello world"
+    assert act2 == "VK_RETURN"
+
+    text3, act3 = parse_spoken_action("Jarvis enter")
+    assert text3 == ""
+    assert act3 == "VK_RETURN"
+
+    text4, act4 = parse_spoken_action("Just normal sentence")
+    assert text4 == "Just normal sentence"
+    assert act4 is None
+
 
 
 

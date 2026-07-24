@@ -10,8 +10,10 @@ Interfaces with Groq's OpenAI-compatible audio transcription REST API:
 
 import logging
 import time
-from typing import Optional, Tuple
+from typing import Any, List, Optional, Tuple
 import requests
+
+from fluid_voice.config import Top8PromptRanker, DEFAULT_HINGLISH_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +109,23 @@ class GroqSTTClient:
         if self._session:
             self._session.close()
 
+    def update_prompt_from_memory(
+        self,
+        memory_engine: Optional[Any] = None,
+        context: Optional[Any] = None,
+        terms: Optional[List[str]] = None,
+    ) -> str:
+        """
+        Updates self.prompt using Context-Aware Top-8 Prompt Ranker (<150 token cap).
+        """
+        self.prompt = Top8PromptRanker.rank_and_build_prompt(
+            base_prompt=self.prompt,
+            memory_engine=memory_engine,
+            context=context,
+            terms=terms,
+        )
+        return self.prompt
+
     def _build_form_data(self, audio_bytes: bytes, model: str) -> dict:
         """Constructs multipart form data dictionary for API request."""
         if not audio_bytes:
@@ -116,7 +135,7 @@ class GroqSTTClient:
             "model": model,
             "prompt": self.prompt,
             "temperature": "0.0",
-            "response_format": "json",
+            "response_format": "verbose_json",
         }
         if self.language:
             data["language"] = self.language
@@ -184,6 +203,33 @@ class GroqSTTClient:
 
                 if not isinstance(result, dict):
                     raise AudioFormatError("Malformed JSON response structure from Groq API")
+
+                # Parse verbose_json metrics
+                no_speech_prob = float(result.get("no_speech_prob", 0.0))
+                avg_logprob = float(result.get("avg_logprob", 0.0))
+                compression_ratio = float(result.get("compression_ratio", 1.0))
+
+                segments = result.get("segments")
+                if segments and isinstance(segments, list) and len(segments) > 0:
+                    ns_probs = [float(s.get("no_speech_prob", 0.0)) for s in segments if isinstance(s, dict) and "no_speech_prob" in s]
+                    if ns_probs:
+                        no_speech_prob = max(ns_probs)
+
+                    logprobs = [float(s.get("avg_logprob", 0.0)) for s in segments if isinstance(s, dict) and "avg_logprob" in s]
+                    if logprobs:
+                        avg_logprob = sum(logprobs) / len(logprobs)
+
+                    comp_ratios = [float(s.get("compression_ratio", 1.0)) for s in segments if isinstance(s, dict) and "compression_ratio" in s]
+                    if comp_ratios:
+                        compression_ratio = max(comp_ratios)
+
+                # Silently drop transcription if hallucination metrics exceed threshold
+                if no_speech_prob > 0.60 or avg_logprob < -1.0 or compression_ratio > 2.4:
+                    logger.info(
+                        f"Dropping hallucinated STT transcript: no_speech_prob={no_speech_prob:.2f}, "
+                        f"avg_logprob={avg_logprob:.2f}, compression_ratio={compression_ratio:.2f}"
+                    )
+                    return ""
 
                 text = result.get("text", "")
                 return text.strip() if isinstance(text, str) else ""

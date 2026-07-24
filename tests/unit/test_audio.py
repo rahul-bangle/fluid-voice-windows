@@ -256,3 +256,39 @@ def test_audio_recorder_device_query_fallback():
         devices = recorder.get_audio_devices()
         assert isinstance(devices, list)
         assert len(devices) == 0
+
+
+def test_audio_recorder_continuous_vad_streaming_adaptive_rms():
+    """Tier 1: Continuous VAD streaming mode updates adaptive RMS and emits speech audio chunks without closing stream."""
+    recorder = AudioRecorder(sample_rate=16000, is_jarvis_mode=True)
+    assert recorder.is_jarvis_mode is True
+    assert recorder.noise_rms == 50.0
+
+    emitted_chunks = []
+    recorder.speech_chunk_emitted.connect(lambda data: emitted_chunks.append(data))
+
+    recorder._is_recording = True
+
+    # 1. Feed quiet ambient noise chunk to update rolling noise_rms
+    noise_chunk = np.full((1024, 1), 100, dtype=np.int16)
+    recorder._audio_callback(noise_chunk, 1024, {}, None)
+    assert recorder.noise_rms != 50.0
+    assert recorder.adaptive_silence_threshold == max(150.0, recorder.noise_rms * 1.5)
+
+    # 2. Feed speech chunk (speech_threshold_rms default is 300.0)
+    speech_chunk = np.full((1024, 1), 2000, dtype=np.int16)
+    for _ in range(7):
+        recorder._audio_callback(speech_chunk, 1024, {}, None)
+
+    assert recorder._speech_detected is True
+
+    # 3. Feed silence chunks to trigger 0.8s silence VAD completion
+    silence_chunk = np.full((1024, 1), 10, dtype=np.int16)
+    for _ in range(13):
+        recorder._audio_callback(silence_chunk, 1024, {}, None)
+
+    assert len(emitted_chunks) == 1
+    assert isinstance(emitted_chunks[0], bytes)
+    assert recorder.is_recording() is True
+    assert recorder._speech_detected is False
+

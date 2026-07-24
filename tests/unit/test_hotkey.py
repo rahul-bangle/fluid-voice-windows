@@ -210,3 +210,67 @@ def test_hotkey_listener_partial_modifier_press_no_trigger():
     listener._on_pynput_release(keyboard.Key.cmd)
     assert listener.is_pressed is False
     keydown_mock.assert_not_called()
+
+
+def test_parse_hotkey_string_ctrl_alt_c():
+    """Milestone 2: Verifies parsing 'Ctrl+Alt+C' hotkey combination."""
+    keys = parse_hotkey_string("Ctrl+Alt+C")
+    assert keyboard.Key.ctrl in keys
+    assert keyboard.Key.alt in keys
+    assert keyboard.KeyCode.from_char("c") in keys
+
+
+def test_hotkey_listener_secondary_hotkey_registration_and_trigger():
+    """Milestone 2: Verifies registering secondary hotkey 'Ctrl+Alt+C' and triggering callbacks."""
+    sec_keydown = MagicMock()
+    sec_keyup = MagicMock()
+
+    listener = HotkeyListener(hotkey_str="Win+Space", debounce_ms=0.0)
+    listener.add_hotkey("Ctrl+Alt+C", on_keydown=sec_keydown, on_keyup=sec_keyup, debounce_ms=0.0)
+
+    ctrl_key = keyboard.Key.ctrl
+    alt_key = keyboard.Key.alt
+    c_key = keyboard.KeyCode.from_char("c")
+
+    # Press Ctrl + Alt + C
+    listener._on_pynput_press(ctrl_key)
+    listener._on_pynput_press(alt_key)
+    sec_keydown.assert_not_called()
+
+    listener._on_pynput_press(c_key)
+    sec_keydown.assert_called_once()
+
+    # Release C key
+    listener._on_pynput_release(c_key)
+    sec_keyup.assert_called_once()
+
+
+def test_parse_hotkey_string_alt_shift_j():
+    """R3: Verifies parsing 'Alt+Shift+J' hotkey combination and secondary binding trigger."""
+    keys = parse_hotkey_string("Alt+Shift+J")
+    assert keyboard.Key.alt in keys
+    assert keyboard.Key.shift in keys
+    assert keyboard.KeyCode.from_char("j") in keys
+
+
+def test_hotkey_listener_alt_shift_j_toggle():
+    """R3: Verifies Alt+Shift+J secondary hotkey registration and mode toggle."""
+    toggle_mock = MagicMock()
+    listener = HotkeyListener(hotkey_str="Win+Space", debounce_ms=0.0)
+    listener.add_hotkey("Alt+Shift+J", on_keydown=toggle_mock, debounce_ms=0.0)
+
+    alt_key = keyboard.Key.alt
+    shift_key = keyboard.Key.shift
+    j_key = keyboard.KeyCode.from_char("j")
+
+    listener._on_pynput_press(alt_key)
+    listener._on_pynput_press(shift_key)
+    toggle_mock.assert_not_called()
+
+    listener._on_pynput_press(j_key)
+    toggle_mock.assert_called_once()
+
+    assert listener.toggle_jarvis_mode() == "jarvis"
+    assert listener.toggle_jarvis_mode() == "press_to_talk"
+
+

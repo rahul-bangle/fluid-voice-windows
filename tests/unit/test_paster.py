@@ -156,3 +156,28 @@ def test_paster_win32_clipboard_fallback_when_qapp_absent(tmp_path):
 
         cb_text = paster.get_clipboard_text()
         assert cb_text == "Win32 Clipboard Fallback Data"
+
+
+def test_paster_win32_action_executor_120ms_delay(qapp):
+    """R3: Verifies paste_text_and_execute_action sleeps 120ms (time.sleep(0.120)) and fires VK_RETURN (0x0D)."""
+    from fluid_voice.paster import paste_text_and_execute_action, AutoPaster
+
+    paster = AutoPaster()
+    sleep_calls = []
+
+    with patch("time.sleep", side_effect=lambda s: sleep_calls.append(s)), \
+         patch.object(paster, "paste_text", return_value=True) as mock_paste, \
+         patch.object(paster, "execute_action", return_value=True) as mock_exec:
+
+        res = paster.paste_text_and_execute_action("hello world", action="VK_RETURN")
+        assert res is True
+        mock_paste.assert_called_once_with("hello world", target_hwnd=None)
+        assert 0.120 in sleep_calls
+        mock_exec.assert_called_once_with("VK_RETURN")
+
+    with patch("time.sleep"), \
+         patch.object(AutoPaster, "paste_text_and_execute_action", return_value=True) as mock_wrapper:
+        res2 = paste_text_and_execute_action("submit", action="VK_RETURN")
+        assert res2 is True
+        mock_wrapper.assert_called_once_with("submit", action="VK_RETURN", target_hwnd=None)
+

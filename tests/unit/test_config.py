@@ -8,6 +8,7 @@ import pytest
 from fluid_voice.config import (
     ConfigManager,
     ConfigData,
+    Top8PromptRanker,
     get_app_data_dir,
     KEYRING_SERVICE,
     KEYRING_USER_GROQ,
@@ -218,3 +219,19 @@ def test_config_manager_thread_safety(tmp_path):
         t.join()
 
     assert config_mgr.data.max_recording_duration_s in range(5)
+
+
+def test_top8_prompt_ranker_token_capping():
+    """R1: Verifies Context-Aware Top-8 Prompt Ranker selects up to 8 terms and enforces strictly <150 token cap."""
+    # 1. Test top-8 selection
+    many_terms = [f"Term{i}" for i in range(15)]
+    prompt_top8 = Top8PromptRanker.rank_and_build_prompt(terms=many_terms)
+    assert "Term0" in prompt_top8
+    assert "Term7" in prompt_top8
+    assert "Term8" not in prompt_top8  # Only top 8 included
+
+    # 2. Test strict token capping under 150 tokens
+    long_terms = ["VeryLongDomainSpecificJargonTermForTestingCapping" * 5 for _ in range(10)]
+    capped_prompt = Top8PromptRanker.rank_and_build_prompt(terms=long_terms)
+    tokens = Top8PromptRanker.estimate_tokens(capped_prompt)
+    assert tokens < 150

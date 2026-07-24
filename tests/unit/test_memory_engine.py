@@ -16,7 +16,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from fluid_voice.memory_engine import MemoryEngine, MemoryStore, MemoryItem, MemoryCategory
+from fluid_voice.memory_engine import MemoryEngine, MemoryStore, MemoryItem, MemoryCategory, diff_tokens, compute_metaphone_keys
 from fluid_voice.context_engine import AppContext, AppCategory
 from fluid_voice.post_processor import HinglishPostProcessor
 
@@ -382,3 +382,55 @@ def test_stt_vocab_prompt_generation(tmp_path):
     assert "Lexicon:" in prompt
     assert "PyQt6" in prompt
     assert "FluidVoice" in prompt
+
+
+def test_memory_engine_token_diffing_isolation_difflib():
+    """Milestone 2: Verifies word-level token diffing with difflib.Differ isolates removed/added pairs."""
+    # Test case 1: "grock" -> "Groq"
+    pairs1 = diff_tokens("mera grock code mast hai", "mera Groq code mast hai")
+    assert pairs1 == [("grock", "Groq")]
+
+    # Test case 2: "pie cut" -> "PyQt6"
+    pairs2 = diff_tokens("pie cut application", "PyQt6 application")
+    assert pairs2 == [("pie cut", "PyQt6")]
+
+    # Test case 3: identical text -> no diff
+    pairs3 = diff_tokens("same text", "same text")
+    assert pairs3 == []
+
+
+def test_memory_engine_metaphone_keys_json_persistence(tmp_path):
+    """Milestone 2: Verifies computing Double Metaphone keys and persisting them to user_memory.json."""
+    json_path = tmp_path / "user_memory.json"
+    engine = MemoryEngine(filepath=json_path)
+
+    # Learn from correction
+    item = engine.learn_from_correction(spoken_text="grock", corrected_term="Groq")
+
+    assert item is not None
+    assert item.term == "Groq"
+    assert "grock" in item.phonetic_variants
+    assert len(item.metaphone_keys) > 0
+    assert item.auto_learned is True
+
+    # Reload engine from disk to verify JSON serialization
+    reloaded_engine = MemoryEngine(filepath=json_path)
+    reloaded_item = reloaded_engine.get_term_by_id(item.id)
+
+    assert reloaded_item is not None
+    assert reloaded_item.term == "Groq"
+    assert "grock" in reloaded_item.phonetic_variants
+    assert len(reloaded_item.metaphone_keys) > 0
+    assert reloaded_item.metaphone_keys == item.metaphone_keys
+
+    # Read raw JSON file to verify metaphone_keys field on disk
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    custom_terms = data.get("custom_terms", [])
+    assert len(custom_terms) == 1
+    term_json = custom_terms[0]
+    assert term_json["term"] == "Groq"
+    assert "metaphone_keys" in term_json
+    assert len(term_json["metaphone_keys"]) > 0
+

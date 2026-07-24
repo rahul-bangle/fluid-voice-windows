@@ -59,7 +59,7 @@ def test_stt_groq_request_formatting_primary():
     assert data["model"] == PRIMARY_MODEL
     assert data["temperature"] == "0.0"
     assert data["language"] == "en"
-    assert data["response_format"] == "json"
+    assert data["response_format"] == "verbose_json"
 
     assert "file" in files
     assert files["file"][0] == "speech.wav"
@@ -293,4 +293,64 @@ def test_stt_groq_exception_hierarchy_attributes():
     assert isinstance(err, GroqSTTError)
     assert err.status_code == 429
     assert err.response == mock_resp
+
+
+def test_stt_groq_verbose_json_hallucination_dropping():
+    """R1: Silently drops transcription if no_speech_prob > 0.60, avg_logprob < -1.0, or compression_ratio > 2.4."""
+    client = GroqSTTClient(api_key="gsk_test")
+    audio_bytes = generate_wav_bytes(duration_sec=1.0)
+
+    # Case 1: no_speech_prob > 0.60
+    mock_resp1 = MagicMock()
+    mock_resp1.status_code = 200
+    mock_resp1.json.return_value = {
+        "text": "Hallucinated silence text",
+        "no_speech_prob": 0.75,
+        "avg_logprob": -0.2,
+        "compression_ratio": 1.1,
+    }
+
+    with patch.object(client._session, "post", return_value=mock_resp1):
+        assert client.transcribe(audio_bytes) == ""
+
+    # Case 2: avg_logprob < -1.0
+    mock_resp2 = MagicMock()
+    mock_resp2.status_code = 200
+    mock_resp2.json.return_value = {
+        "text": "Low confidence hallucination",
+        "no_speech_prob": 0.10,
+        "avg_logprob": -1.35,
+        "compression_ratio": 1.1,
+    }
+
+    with patch.object(client._session, "post", return_value=mock_resp2):
+        assert client.transcribe(audio_bytes) == ""
+
+    # Case 3: compression_ratio > 2.4
+    mock_resp3 = MagicMock()
+    mock_resp3.status_code = 200
+    mock_resp3.json.return_value = {
+        "text": "Repeated hallucination phrase " * 10,
+        "no_speech_prob": 0.10,
+        "avg_logprob": -0.3,
+        "compression_ratio": 2.8,
+    }
+
+    with patch.object(client._session, "post", return_value=mock_resp3):
+        assert client.transcribe(audio_bytes) == ""
+
+    # Case 4: Normal valid response
+    mock_resp4 = MagicMock()
+    mock_resp4.status_code = 200
+    mock_resp4.json.return_value = {
+        "text": "Valid user speech",
+        "no_speech_prob": 0.05,
+        "avg_logprob": -0.2,
+        "compression_ratio": 1.2,
+    }
+
+    with patch.object(client._session, "post", return_value=mock_resp4):
+        assert client.transcribe(audio_bytes) == "Valid user speech"
+
+    client.close()
 

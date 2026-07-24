@@ -26,6 +26,7 @@ VK_RSHIFT = 0xA3
 class HotkeyMode:
     PRESS_TO_TALK = "press_to_talk"
     TOGGLE = "toggle"
+    JARVIS = "jarvis"
 
 
 def _is_win32_key_down(vk_code: int) -> bool:
@@ -134,6 +135,7 @@ class HotkeyListener:
 
         self._active_keys: Set[keyboard.Key | keyboard.KeyCode] = set()
         self._target_keys: Set[keyboard.Key | keyboard.KeyCode] = set()
+        self._secondary_bindings: list[dict[str, Any]] = []
         self._listener: Optional[keyboard.Listener] = None
         self._rescue_thread: Optional[threading.Thread] = None
         self._is_running = False
@@ -158,10 +160,44 @@ class HotkeyListener:
             return self._mode
 
     def set_mode(self, mode_str: str) -> bool:
-        if mode_str not in (HotkeyMode.PRESS_TO_TALK, HotkeyMode.TOGGLE):
+        if mode_str not in (HotkeyMode.PRESS_TO_TALK, HotkeyMode.TOGGLE, HotkeyMode.JARVIS):
             return False
         with self._lock:
             self._mode = mode_str
+            return True
+
+    def toggle_jarvis_mode(self) -> str:
+        """Toggles between PRESS_TO_TALK and JARVIS mode."""
+        with self._lock:
+            if self._mode == HotkeyMode.JARVIS:
+                self._mode = HotkeyMode.PRESS_TO_TALK
+            else:
+                self._mode = HotkeyMode.JARVIS
+            return self._mode
+
+    def add_hotkey(
+        self,
+        hotkey_str: str,
+        on_keydown: Optional[Callable[[], None]] = None,
+        on_keyup: Optional[Callable[[], None]] = None,
+        on_toggle: Optional[Callable[[], None]] = None,
+        debounce_ms: float = 50.0,
+    ) -> bool:
+        """Registers an additional secondary hotkey binding and callback."""
+        with self._lock:
+            target_keys = parse_hotkey_string(hotkey_str)
+            binding = {
+                "hotkey_str": hotkey_str,
+                "target_keys": target_keys,
+                "on_keydown": on_keydown,
+                "on_keyup": on_keyup,
+                "on_toggle": on_toggle,
+                "debounce_ms": debounce_ms,
+                "is_pressed": False,
+                "last_toggle_time": 0.0,
+            }
+            self._secondary_bindings.append(binding)
+            logger.info(f"Registered secondary hotkey: {hotkey_str}")
             return True
 
     def rebind(self, new_hotkey_str: str) -> bool:
@@ -225,6 +261,8 @@ class HotkeyListener:
             self._rescue_thread = None
             self._active_keys.clear()
             self._is_pressed = False
+            for binding in self._secondary_bindings:
+                binding["is_pressed"] = False
             logger.info("HotkeyListener stopped")
 
     def _rescue_polling_loop(self) -> None:
@@ -284,25 +322,42 @@ class HotkeyListener:
 
             if self._target_keys and self._target_keys.issubset(self._active_keys):
                 now = time.time() * 1000.0
-                if now - self._last_toggle_time < self.debounce_ms:
-                    logger.debug("Hotkey press ignored due to debounce")
-                    return
+                if now - self._last_toggle_time >= self.debounce_ms:
+                    self._last_toggle_time = now
+                    if not self._is_pressed:
+                        self._is_pressed = True
+                        print(f"\n[HOTKEY TRIGGERED] 🎙️ Activated ({self.hotkey_str}) — Recording Started!")
+                        logger.info(f"Hotkey triggered: {self.hotkey_str}")
+                        if self.on_keydown:
+                            try:
+                                self.on_keydown()
+                            except Exception as e:
+                                logger.error(f"Error in on_keydown callback: {e}")
+                        if self.on_toggle:
+                            try:
+                                self.on_toggle()
+                            except Exception as e:
+                                logger.error(f"Error in on_toggle callback: {e}")
 
-                self._last_toggle_time = now
-                if not self._is_pressed:
-                    self._is_pressed = True
-                    print(f"\n[HOTKEY TRIGGERED] 🎙️ Activated ({self.hotkey_str}) — Recording Started!")
-                    logger.info(f"Hotkey triggered: {self.hotkey_str}")
-                    if self.on_keydown:
-                        try:
-                            self.on_keydown()
-                        except Exception as e:
-                            logger.error(f"Error in on_keydown callback: {e}")
-                    if self.on_toggle:
-                        try:
-                            self.on_toggle()
-                        except Exception as e:
-                            logger.error(f"Error in on_toggle callback: {e}")
+            now = time.time() * 1000.0
+            for binding in self._secondary_bindings:
+                target_keys = binding["target_keys"]
+                if target_keys and target_keys.issubset(self._active_keys):
+                    if now - binding["last_toggle_time"] >= binding["debounce_ms"]:
+                        binding["last_toggle_time"] = now
+                        if not binding["is_pressed"]:
+                            binding["is_pressed"] = True
+                            logger.info(f"Secondary hotkey triggered: {binding['hotkey_str']}")
+                            if binding["on_keydown"]:
+                                try:
+                                    binding["on_keydown"]()
+                                except Exception as e:
+                                    logger.error(f"Error in secondary hotkey on_keydown callback: {e}")
+                            if binding["on_toggle"]:
+                                try:
+                                    binding["on_toggle"]()
+                                except Exception as e:
+                                    logger.error(f"Error in secondary hotkey on_toggle callback: {e}")
 
     def _on_pynput_release(self, key) -> None:
         norm_key = self._normalize_key(key)
@@ -321,4 +376,16 @@ class HotkeyListener:
                         self.on_keyup()
                     except Exception as e:
                         logger.error(f"Error in on_keyup callback: {e}")
+
+            for binding in self._secondary_bindings:
+                target_keys = binding["target_keys"]
+                if binding["is_pressed"] and not target_keys.issubset(self._active_keys):
+                    binding["is_pressed"] = False
+                    logger.info(f"Secondary hotkey released: {binding['hotkey_str']}")
+                    if binding["on_keyup"]:
+                        try:
+                            binding["on_keyup"]()
+                        except Exception as e:
+                            logger.error(f"Error in secondary hotkey on_keyup callback: {e}")
+
 
