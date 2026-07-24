@@ -42,7 +42,7 @@ class HabitNudgeEngine:
     def __init__(
         self,
         key_threshold: int = 5,
-        time_window_sec: float = 4.0,
+        time_window_sec: float = 15.0,
         on_nudge_trigger: Optional[Callable[[], None]] = None,
         is_pasting_check: Optional[Callable[[], bool]] = None,
     ):
@@ -124,6 +124,7 @@ class HabitNudgeEngine:
             now = time.time()
             if now - self._last_key_time > self.time_window_sec:
                 self._key_count = 0
+                self._nudge_shown = False  # Auto-reset nudge after idle period
 
             self._last_key_time = now
             self._key_count += 1

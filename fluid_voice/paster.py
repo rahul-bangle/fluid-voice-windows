@@ -271,6 +271,25 @@ class AutoPaster:
         2. Tries Direct Win32 SendInput Unicode Injection (<3ms, zero clipboard touch).
         3. Fallback: Backs up clipboard, sets text, restores target window, injects Ctrl+V, restores clipboard.
         """
+    def is_console_window(self, hwnd: int) -> bool:
+        """Returns True if target window is a Windows Terminal, PowerShell, CMD, or SSH console."""
+        if not hwnd or not win32gui:
+            return False
+        try:
+            cls_name = win32gui.GetClassName(hwnd).lower()
+            if any(c in cls_name for c in ["consolewindowclass", "cascadia_hosting_window_class", "mintty"]):
+                return True
+        except Exception:
+            pass
+        return False
+
+    def paste_text(self, text: str, target_hwnd: Optional[int] = None) -> bool:
+        """
+        Injects text into target active window.
+        1. Validates non-empty text.
+        2. Uses Direct Win32 SendInput for GUI apps.
+        3. Uses Clipboard paste for Terminal/Console windows (100% reliable in PowerShell/CMD/VS Code).
+        """
         if not text or not text.strip():
             logger.info("Empty text provided to paste_text; skipping paste.")
             return False
@@ -283,8 +302,8 @@ class AutoPaster:
         if target_hwnd and target_hwnd != 0:
             self.restore_active_window(target_hwnd)
 
-        # Primary Fast Path: Try Win32 SendInput Unicode injection (<3ms)
-        if self.inject_unicode_text(text):
+        # Primary Fast Path: Try Win32 SendInput Unicode injection for standard GUI apps
+        if not self.is_console_window(target_hwnd) and self.inject_unicode_text(text):
             elapsed_ms = (time.perf_counter() - start_time) * 1000.0
             logger.info(f"Direct SendInput typed '{text[:30]}...' in {elapsed_ms:.2f}ms (Zero Clipboard)")
             return True
