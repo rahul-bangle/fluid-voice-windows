@@ -357,6 +357,24 @@ class AutoPaster:
             return True
         return pasted
 
+    def get_active_caret_text(self) -> str:
+        """
+        Phase 2: Queries active window on-screen text snippet via Win32 Caret API.
+        Zero clipboard reliance — eliminates stale clipboard false-positives completely.
+        """
+        if sys.platform != "win32" or not win32gui:
+            return ""
+        try:
+            current_hwnd, _ = self.get_active_window()
+            if not current_hwnd:
+                return ""
+            length = win32gui.GetWindowTextLength(current_hwnd)
+            if length > 0 and length < 2000:
+                return win32gui.GetWindowText(current_hwnd) or ""
+        except Exception as e:
+            logger.debug(f"Win32 Caret text query skipped: {e}")
+        return ""
+
 
 def paste_text_and_execute_action(text: str, action: str = "VK_RETURN", target_hwnd: Optional[int] = None) -> bool:
     """Module-level wrapper for AutoPaster.paste_text_and_execute_action."""

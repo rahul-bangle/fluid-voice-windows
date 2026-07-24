@@ -565,7 +565,8 @@ class FluidVoiceApp(QObject):
     def _check_passive_learning_snapshot(self) -> None:
         """
         Phase 2: Autonomous 5-Second Post-Paste Auto-Learning Engine.
-        5 seconds after auto-pasting, checks if user modified/corrected text via clipboard/caret.
+        Queries on-screen active window caret text snippet directly.
+        BANS system clipboard reads (clipboard reads reserved strictly for Ctrl+Alt+C).
         """
         if not hasattr(self, "_last_paste_snapshot") or not self._last_paste_snapshot:
             return
@@ -573,13 +574,28 @@ class FluidVoiceApp(QObject):
         self._last_paste_snapshot = None
 
         try:
-            clipboard = self.qt_app.clipboard()
-            curr_clip = clipboard.text() if clipboard else ""
-            if curr_clip and curr_clip != pasted_text and len(curr_clip.strip().split()) <= 10:
-                logger.info(f"[PASSIVE AUTO-LEARNING] Detected post-paste text edit: '{curr_clip}' (Original: '{pasted_text}')")
-                self.learn_from_clipboard(curr_clip)
+            if not self.paster_engine:
+                return
+
+            caret_snippet = self.paster_engine.get_active_caret_text()
+            if not caret_snippet or not caret_snippet.strip():
+                return
+
+            spoken_text = raw_text or pasted_text
+            if spoken_text and caret_snippet != pasted_text:
+                if not self.memory_engine:
+                    self.memory_engine = MemoryEngine(filepath=self.config_manager.config_dir / "user_memory.json")
+
+                item = self.memory_engine.learn_from_correction(
+                    spoken_text=spoken_text,
+                    corrected_term=caret_snippet,
+                    context=self._current_context,
+                )
+                if item and self.post_processor:
+                    self.post_processor.update_brand_map(self.memory_engine.get_phonetic_mappings())
+                    logger.info(f"[PASSIVE UIA LEARNING] Learned true acoustic mishear from caret: '{spoken_text}' -> '{caret_snippet}'")
         except Exception as e:
-            logger.debug(f"Passive learning snapshot check skipped: {e}")
+            logger.debug(f"Passive UIA learning snapshot check skipped: {e}")
 
     def _handle_pipeline_error(self, err: Exception) -> None:
         err_msg = str(err)
