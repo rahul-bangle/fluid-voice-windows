@@ -520,6 +520,7 @@ JARVIS_ACTIVATION_TRIGGERS = [
     "computer type",
     "type",
     "typing",
+    "taping",
 ]
 
 JARVIS_PAUSE_TRIGGERS = [
@@ -528,6 +529,9 @@ JARVIS_PAUSE_TRIGGERS = [
     "stop typing",
     "computer stop",
     "jarvis paz",
+    "jarvis pass",
+    "jarvis path",
+    "stop taping",
     "pause typing",
     "pause",
 ]

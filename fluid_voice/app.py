@@ -340,8 +340,16 @@ class FluidVoiceApp(QObject):
             self.overlay_widget.set_state("error", f"Error: {err_msg}")
 
     def _process_dictation_pipeline(self, audio_bytes: bytes) -> None:
-        """Executes the STT transcription and post-processing pipeline."""
+        """Executes the STT transcription and post-processing pipeline with rate-limit and latency guards."""
         t_pipeline_start = time.perf_counter()
+        if not audio_bytes or len(audio_bytes) < 8000:
+            logger.debug("Audio chunk too short (<0.25s). Skipping pipeline.")
+            if self.hotkey_engine and getattr(self.hotkey_engine, "mode", "") == "jarvis":
+                self.set_state(AppState.RECORDING, "Jarvis Standby")
+            else:
+                self.set_state(AppState.IDLE, "FluidVoice is ready")
+            return
+
         try:
             if self.stt_client is None:
                 api_key = self.config_manager.get_api_key()
@@ -366,18 +374,13 @@ class FluidVoiceApp(QObject):
             if self.post_processor is None:
                 self.post_processor = HinglishPostProcessor()
 
-            api_key = self.config_manager.get_api_key() or os.getenv("GROQ_API_KEY", "").strip()
-            t_llm_start = time.perf_counter()
-            print("[STAGE 2 LLM] ⚡ Cleaning & formatting via Groq Llama-3.1-8B Instant...")
-            processed_text = self.post_processor.process_with_groq_llm(
-                raw_text, api_key=api_key, context=self._current_context, memory_engine=self.memory_engine
-            )
+            raw_lower = (raw_text or "").strip().lower()
 
-            # Jarvis Callout & Standby Background Noise Filter
+            # Fast Pre-Filter 1: Standby Mode Audio Gate (Bypasses LLM to prevent rate limits)
             if self.hotkey_engine and getattr(self.hotkey_engine, "mode", "") == "jarvis":
                 from fluid_voice.post_processor import parse_jarvis_trigger
                 is_active = getattr(self, "_jarvis_active", False)
-                cleaned_j_text, new_active_state, j_status = parse_jarvis_trigger(processed_text, is_active)
+                cleaned_j_text, new_active_state, j_status = parse_jarvis_trigger(raw_text, is_active)
                 self._jarvis_active = new_active_state
 
                 if j_status == "ACTIVATED":
@@ -393,7 +396,26 @@ class FluidVoiceApp(QObject):
                     self.set_state(AppState.RECORDING, "Jarvis Standby")
                     return
 
-                processed_text = cleaned_j_text
+                raw_text = cleaned_j_text
+                raw_lower = (raw_text or "").strip().lower()
+
+            # Fast Pre-Filter 2: Whisper Hallucination & Silence Guard (Bypasses LLM)
+            if not raw_text or not raw_text.strip() or any(h in raw_lower for h in HinglishPostProcessor.WHISPER_HALLUCINATIONS):
+                print("[STAGE 2 LLM] ⏭️ Skipping Stage 2 LLM for empty/hallucinated transcript.")
+                self.set_state(AppState.IDLE, "FluidVoice is ready")
+                return
+
+            api_key = self.config_manager.get_api_key() or os.getenv("GROQ_API_KEY", "").strip()
+            t_llm_start = time.perf_counter()
+            print("[STAGE 2 LLM] ⚡ Cleaning & formatting via Groq Llama-3.1-8B Instant...")
+
+            try:
+                processed_text = self.post_processor.process_with_groq_llm(
+                    raw_text, api_key=api_key, context=self._current_context, memory_engine=self.memory_engine
+                )
+            except Exception as llm_err:
+                logger.warning(f"Stage 2 LLM unavailable ({llm_err}). Falling back to fast deterministic rule engine.")
+                processed_text = self.post_processor.process(raw_text)
 
             cleaned_text, action = parse_spoken_action(processed_text)
             self._last_transcript = cleaned_text or processed_text or ""
@@ -457,6 +479,12 @@ class FluidVoiceApp(QObject):
 
         if not corrected_text or not corrected_text.strip():
             logger.warning("Clipboard is empty or contains no text for correction learning.")
+            return None
+
+        clean_corr = corrected_text.strip()
+        # Ignore file paths, URLs, or command lines copied to clipboard
+        if clean_corr.lower().startswith(("c:\\", "e:\\", "d:\\", "http://", "https://", "file://", "ps ")) or (len(clean_corr) > 2 and clean_corr[1:3] == ":\\"):
+            logger.warning(f"Clipboard contains a file path or URL ('{clean_corr}'). Skipping memory learning.")
             return None
 
         spoken_text = getattr(self, "_last_raw_transcript", "") or getattr(self, "_last_transcript", "")
