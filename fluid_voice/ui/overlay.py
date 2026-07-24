@@ -231,7 +231,11 @@ class OverlayWidget(QWidget):
         self._init_ui()
         self._init_timers_and_animations()
 
-        self.set_state(OverlayState.LISTENING, "Listening...")
+        self._state = OverlayState.IDLE
+        self._message = "Ready"
+        self._waveform.set_state("idle")
+        self._lbl_status.setText(self._message)
+        self.hide()
 
     def apply_window_flags(self) -> None:
         """Configure top-most, frameless, non-activating window flags."""
@@ -334,6 +338,7 @@ class OverlayWidget(QWidget):
         elif self._state == OverlayState.IDLE:
             self._message = message or "Ready"
             self._waveform.set_state("idle")
+            self._schedule_auto_hide(200)
 
         self._lbl_status.setText(self._message)
         self.update()

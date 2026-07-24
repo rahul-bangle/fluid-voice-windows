@@ -222,6 +222,7 @@ class FluidVoiceApp(QObject):
             )
         self.hotkey_engine.add_hotkey("Ctrl+Alt+C", on_keydown=self.learn_from_clipboard)
         self.hotkey_engine.add_hotkey("Alt+Shift+J", on_keydown=self.toggle_jarvis_mode)
+        self.hotkey_engine.add_hotkey("esc", on_keydown=self.cancel_recording)
         if not self.hotkey_engine.is_running:
             self.hotkey_engine.start()
 
@@ -242,7 +243,7 @@ class FluidVoiceApp(QObject):
         self.sigint_timer.timeout.connect(lambda: None)
 
     def set_state(self, state: AppState, message: str = "") -> None:
-        """Transitions global application state and updates tray visual indicators."""
+        """Transitions global application state and updates tray and overlay visual indicators."""
         self._state = state
         logger.info(f"App State Changed: {state.name} | {message}")
 
@@ -257,7 +258,34 @@ class FluidVoiceApp(QObject):
         if self.tray_icon:
             self.tray_icon.set_state(tray_state_map[state], f"FluidVoice - {message or state.name}")
 
+        if self.overlay_widget:
+            overlay_map = {
+                AppState.IDLE: "idle",
+                AppState.RECORDING: "listening",
+                AppState.TRANSCRIBING: "transcribing",
+                AppState.PASTING: "pasted",
+                AppState.ERROR: "error",
+            }
+            if state in overlay_map:
+                self.overlay_widget.set_state(overlay_map[state], message or state.name)
+
         self.state_changed.emit(state, message)
+
+    @pyqtSlot()
+    def cancel_recording(self) -> None:
+        """Emergency ESC hatch: Aborts active recording/transcription, clears audio, and hides overlay."""
+        if QThread.currentThread() != self.thread():
+            QMetaObject.invokeMethod(self, "cancel_recording", Qt.ConnectionType.QueuedConnection)
+            return
+
+        logger.info("[EMERGENCY CANCEL] ESC key pressed. Aborting recording and clearing audio buffer.")
+        if self.audio_recorder and self.audio_recorder.is_recording():
+            try:
+                self.audio_recorder.stop_recording()
+            except Exception:
+                pass
+        self._last_raw_transcript = ""
+        self.set_state(AppState.IDLE, "FluidVoice is ready")
 
     def toggle_recording(self) -> None:
         if self._state == AppState.IDLE:
