@@ -110,6 +110,8 @@ class ConfigData:
     hinglish_prompt: str = DEFAULT_ENGLISH_PROMPT
     language: str = "en"
     groq_api_key_fallback: str = ""
+    force_offline_mode: bool = False
+    use_fast_local_engine: bool = False
 
 
 class ConfigManager:
