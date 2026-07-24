@@ -26,6 +26,36 @@ except ImportError:
     QWebEngineView = None
 
 
+import http.server
+import socketserver
+import threading
+
+_LOCAL_SERVER_PORT = 8765
+_SERVER_STARTED = False
+_SERVER_LOCK = threading.Lock()
+
+def _ensure_local_http_server(root_dir: Path) -> int:
+    global _SERVER_STARTED
+    with _SERVER_LOCK:
+        if not _SERVER_STARTED:
+            class CustomHandler(http.server.SimpleHTTPRequestHandler):
+                def __init__(self, *args, **kwargs):
+                    super().__init__(*args, directory=str(root_dir), **kwargs)
+                def log_message(self, format, *args):
+                    pass # suppress verbose http logs
+
+            try:
+                httpd = socketserver.TCPServer(("127.0.0.1", _LOCAL_SERVER_PORT), CustomHandler)
+                t = threading.Thread(target=httpd.serve_forever, daemon=True)
+                t.start()
+                _SERVER_STARTED = True
+                logger.info(f"Started Velo AI Frontend HTTP server on port {_LOCAL_SERVER_PORT}")
+            except Exception as e:
+                logger.debug(f"HTTP Server port {_LOCAL_SERVER_PORT} already active: {e}")
+                _SERVER_STARTED = True
+    return _LOCAL_SERVER_PORT
+
+
 class VeloVoiceDashboardWindow(QMainWindow):
     """
     Pixel-Perfect Desktop Window hosting Velo AI HTML Mockup Frontend.
@@ -44,9 +74,10 @@ class VeloVoiceDashboardWindow(QMainWindow):
         self._init_ui()
 
     def _init_ui(self) -> None:
-        main_html = self.frontend_dir / "velo_ai_dashboard_light_mode" / "code.html"
+        port = _ensure_local_http_server(self.frontend_dir)
+        url_str = f"http://127.0.0.1:{port}/velo_ai_dashboard_light_mode/code.html"
 
-        if HAS_WEBENGINE and main_html.exists():
+        if HAS_WEBENGINE:
             self.web_view = QWebEngineView(self)
             
             # Enable local content access and smooth rendering
@@ -55,12 +86,12 @@ class VeloVoiceDashboardWindow(QMainWindow):
             settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
             
-            # Load main mockup HTML file directly
-            self.web_view.setUrl(QUrl.fromLocalFile(str(main_html)))
+            # Load main mockup HTML file via HTTP server
+            self.web_view.setUrl(QUrl(url_str))
             self.setCentralWidget(self.web_view)
-            logger.info(f"Loaded pixel-perfect Velo AI HTML mockup from: {main_html}")
+            logger.info(f"Loaded pixel-perfect Velo AI HTML mockup from: {url_str}")
         else:
-            logger.error(f"WebEngine or HTML mockup not found at {main_html}")
+            logger.error("WebEngine not installed")
             fallback = QWidget(self)
             self.setCentralWidget(fallback)
 
