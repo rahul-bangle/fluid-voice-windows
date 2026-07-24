@@ -36,7 +36,7 @@ def test_stt_groq_init_valid():
     assert client.primary_model == PRIMARY_MODEL
     assert client.fallback_model == FALLBACK_MODEL
     assert client.prompt == DEFAULT_HINGLISH_PROMPT
-    assert client.timeout == 5.0
+    assert client.timeout == 1.5
     client.close()
 
 
