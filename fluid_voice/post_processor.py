@@ -5,8 +5,11 @@ Lightweight, deterministic Hinglish text post-processor.
 Zero external dependencies, fast execution for live dictation.
 """
 
+import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple, Set
+
+logger = logging.getLogger(__name__)
 
 
 def double_metaphone(word: str) -> Tuple[str, str]:
@@ -264,33 +267,77 @@ def jaro_winkler_distance(s1: str, s2: str, p: float = 0.1) -> float:
     return jaro + prefix_len * p * (1.0 - jaro)
 
 
+from functools import lru_cache
+
+
+@lru_cache(maxsize=4096)
 def _get_metaphone_set(word: str) -> Set[str]:
-    """Helper to extract non-empty metaphone keys for a word."""
+    """Helper to extract non-empty metaphone keys for a word (cached)."""
     if not word:
         return set()
     p, s = double_metaphone(word)
-    # Empty string set filtering: set() - {""}
-    res = {p, s} - {""}
-    return res
+    return {p, s} - {""}
 
 
-def resolve_phonetic_mishears(text: str, lexicon_map: Optional[Dict[str, str]] = None) -> str:
+COMMON_STOP_WORDS = {
+    "the", "be", "to", "of", "and", "a", "in", "that", "have", "i", "it", "for", "not", "on", "with",
+    "he", "as", "you", "do", "at", "this", "but", "his", "by", "from", "they", "we", "say", "her",
+    "she", "or", "an", "will", "my", "one", "all", "would", "there", "their", "what", "so", "up",
+    "out", "if", "about", "who", "get", "which", "go", "me", "when", "make", "can", "like", "time",
+    "no", "just", "him", "know", "take", "people", "into", "year", "your", "good", "some", "could",
+    "them", "see", "other", "than", "then", "now", "look", "only", "come", "its", "over", "think",
+    "also", "back", "after", "use", "two", "how", "our", "work", "first", "well", "way", "even",
+    "new", "want", "because", "any", "these", "give", "day", "most", "us", "is", "are", "was",
+    "were", "has", "had", "been", "thing", "things", "general", "channel", "check", "number",
+    "revert", "asap", "name", "bhai", "please"
+}
+
+
+def _build_lexicon_index(lexicon_map: Dict[str, str]) -> List[Dict[str, Any]]:
+    """Helper to pre-compile lexicon metaphones and clean string representations."""
+    indexed = []
+    for key, canonical in lexicon_map.items():
+        key_clean = "".join(c for c in key.lower() if c.isalnum())
+        can_clean = "".join(c for c in canonical.lower() if c.isalnum())
+        key_meta = _get_metaphone_set(key_clean)
+        can_meta = _get_metaphone_set(can_clean)
+        target_meta = (key_meta | can_meta) - {""}
+        indexed.append({
+            "key": key,
+            "canonical": canonical,
+            "key_clean": key_clean,
+            "can_clean": can_clean,
+            "key_lower": key.lower(),
+            "target_meta": target_meta,
+            "is_multiword": " " in key.strip(),
+        })
+    return indexed
+
+
+def resolve_phonetic_mishears(
+    text: str, lexicon_map: Optional[Dict[str, str]] = None, indexed_lexicon: Optional[List[Dict[str, Any]]] = None
+) -> str:
     """
     Phonetic mishear resolution using Double Metaphone and Jaro-Winkler distance.
     Filters out empty string metaphone codes (`set() - {""}`).
     Preserves attached leading/trailing punctuation (e.g. "pie cut," -> "PyQt6,").
+    Strictly guards against over-eager mishear corruptions of common English words.
     """
-    if not text or not text.strip():
-        return text
+    if indexed_lexicon is None:
+        if lexicon_map is None:
+            lexicon_map = HinglishPostProcessor.BRAND_MAP
 
-    if lexicon_map is None:
-        lexicon_map = HinglishPostProcessor.BRAND_MAP
+        full_lexicon = dict(lexicon_map)
+        full_lexicon.setdefault("pie cut", "PyQt6")
+        full_lexicon.setdefault("graph kewl", "GraphQL")
+        full_lexicon.setdefault("graphql", "GraphQL")
 
-    # Ensure default target terms exist in search dictionary
-    full_lexicon = dict(lexicon_map)
-    full_lexicon.setdefault("pie cut", "PyQt6")
-    full_lexicon.setdefault("graph kewl", "GraphQL")
-    full_lexicon.setdefault("graphql", "GraphQL")
+        indexed_lexicon = _build_lexicon_index(full_lexicon)
+
+    if "\n" in text:
+        lines = text.split("\n")
+        processed_lines = [resolve_phonetic_mishears(line, lexicon_map, indexed_lexicon) for line in lines]
+        return "\n".join(processed_lines)
 
     tokens = text.split()
     if not tokens:
@@ -309,61 +356,118 @@ def resolve_phonetic_mishears(text: str, lexicon_map: Optional[Dict[str, str]] =
         if i + 1 < len(tokens):
             lead1, core1, trail1 = split_punct(tokens[i])
             lead2, core2, trail2 = split_punct(tokens[i + 1])
-            phrase_clean = (core1 + " " + core2).strip().lower()
-            phrase_concat = (core1 + core2).strip().lower()
+            core1_clean = "".join(c for c in core1.lower() if c.isalnum())
+            core2_clean = "".join(c for c in core2.lower() if c.isalnum())
+            phrase_clean = (core1_clean + " " + core2_clean).strip()
+            phrase_concat = (core1_clean + core2_clean).strip()
 
-            m1 = _get_metaphone_set(core1)
-            m2 = _get_metaphone_set(core2)
-            # Empty string set filtering: set() - {""}
-            phrase_meta = ({p1 + p2 for p1 in m1 for p2 in m2} | m1 | m2) - {""}
+            if len(phrase_concat) >= 4:
+                m1 = _get_metaphone_set(core1_clean)
+                m2 = _get_metaphone_set(core2_clean)
+                phrase_meta = ({p1 + p2 for p1 in m1 for p2 in m2} | m1 | m2) - {""}
 
-            matched = False
-            for key, canonical in full_lexicon.items():
-                key_clean = "".join(c for c in key.lower() if c.isalnum())
-                can_clean = "".join(c for c in canonical.lower() if c.isalnum())
-                # Empty string set filtering: set() - {""}
-                target_meta = (_get_metaphone_set(key_clean) | _get_metaphone_set(can_clean)) - {""}
+                matched = False
+                for item in indexed_lexicon:
+                    key_clean = item["key_clean"]
+                    can_clean = item["can_clean"]
+                    key_lower = item["key_lower"]
 
-                # Check metaphone intersection without empty strings
-                common_meta = (phrase_meta & target_meta) - {""}
+                    # Exact phrase match check
+                    if phrase_clean == key_lower or phrase_concat == can_clean or phrase_clean == key_clean:
+                        replacement = f"{lead1}{item['canonical']}{trail2}"
+                        new_tokens.append(replacement)
+                        i += 2
+                        matched = True
+                        break
 
-                jw_text = jaro_winkler_distance(phrase_concat, can_clean)
-                jw_key = jaro_winkler_distance(phrase_clean, key.lower())
+                    # If core1 or core2 alone matches this canonical item, do not let n-gram absorb the other word
+                    if core1_clean == key_clean or core1_clean == can_clean or core2_clean == key_clean or core2_clean == can_clean:
+                        continue
 
-                if common_meta or jw_text >= 0.70 or jw_key >= 0.70 or phrase_clean == key.lower():
-                    # Preserving attached leading/trailing punctuation
-                    replacement = f"{lead1}{canonical}{trail2}"
-                    new_tokens.append(replacement)
-                    i += 2
-                    matched = True
-                    break
-            if matched:
-                continue
+                    # Fast pre-filter: skip stop words & short phrases
+                    if core1_clean in COMMON_STOP_WORDS and core2_clean in COMMON_STOP_WORDS:
+                        continue
+
+                    common_meta = (phrase_meta & item["target_meta"]) - {""}
+                    if not common_meta:
+                        continue
+
+                    # Require at least one metaphone key of length >= 3 to avoid single-letter collisions ("A", "K")
+                    if not any(len(m) >= 3 for m in common_meta):
+                        continue
+
+                    jw_text = jaro_winkler_distance(phrase_concat, can_clean)
+                    jw_key = jaro_winkler_distance(phrase_clean, key_lower)
+
+                    # Length ratio & diff guard
+                    max_len = max(len(phrase_concat), len(can_clean))
+                    min_len = min(len(phrase_concat), len(can_clean))
+                    ratio = min_len / max_len if max_len > 0 else 0
+                    diff = abs(len(phrase_concat) - len(can_clean))
+
+                    if (jw_text >= 0.88 or jw_key >= 0.85) and ratio >= 0.65 and diff <= 3:
+                        replacement = f"{lead1}{item['canonical']}{trail2}"
+                        new_tokens.append(replacement)
+                        i += 2
+                        matched = True
+                        break
+
+                if matched:
+                    continue
 
         # 2. Try single word match
         lead, core, trail = split_punct(tokens[i])
         core_lower = core.lower()
-        if core:
-            word_meta = _get_metaphone_set(core) - {""}
+        core_clean = "".join(c for c in core_lower if c.isalnum())
+
+        if core_clean and len(core_clean) >= 3:
             matched = False
-            for key, canonical in full_lexicon.items():
-                if " " in key:
+            for item in indexed_lexicon:
+                if item["is_multiword"]:
                     continue
-                key_clean = "".join(c for c in key.lower() if c.isalnum())
-                can_clean = "".join(c for c in canonical.lower() if c.isalnum())
-                target_meta = (_get_metaphone_set(key_clean) | _get_metaphone_set(can_clean)) - {""}
 
-                common_meta = (word_meta & target_meta) - {""}
-                jw_text = jaro_winkler_distance(core_lower, can_clean)
+                key_clean = item["key_clean"]
+                can_clean = item["can_clean"]
 
-                if (common_meta and jw_text >= 0.65) or core_lower == key_clean:
-                    new_tokens.append(f"{lead}{canonical}{trail}")
+                # Exact match check
+                if core_clean == key_clean or core_clean == can_clean:
+                    new_tokens.append(f"{lead}{item['canonical']}{trail}")
                     i += 1
                     matched = True
                     break
+
+                # Fast pre-filter: skip stop words & non-ASCII/Devanagari script
+                if core_clean in COMMON_STOP_WORDS or any(ord(c) > 127 for c in core):
+                    continue
+
+                word_meta = _get_metaphone_set(core_clean) - {""}
+                common_meta = (word_meta & item["target_meta"]) - {""}
+                if not common_meta:
+                    continue
+
+                # Metaphone code length guard (must be >= 3)
+                if not any(len(m) >= 3 for m in common_meta):
+                    continue
+
+                jw_text = jaro_winkler_distance(core_clean, can_clean)
+                jw_key = jaro_winkler_distance(core_clean, key_clean)
+
+                # Length ratio & diff guard
+                max_len = max(len(core_clean), len(can_clean))
+                min_len = min(len(core_clean), len(can_clean))
+                ratio = min_len / max_len if max_len > 0 else 0
+                diff = abs(len(core_clean) - len(can_clean))
+
+                if (jw_text >= 0.88 or jw_key >= 0.85) and ratio >= 0.65 and diff <= 3:
+                    new_tokens.append(f"{lead}{item['canonical']}{trail}")
+                    i += 1
+                    matched = True
+                    break
+
             if matched:
                 continue
 
+        # Default single token advance (FIXED: single append & increment)
         new_tokens.append(tokens[i])
         i += 1
 
@@ -669,8 +773,8 @@ class HinglishPostProcessor:
 
         text = self.re_brands.sub(replace_brand, text)
 
-        # Double Metaphone + Jaro-Winkler phonetic mishear resolution
-        text = resolve_phonetic_mishears(text, self.BRAND_MAP)
+        # Double Metaphone + Jaro-Winkler phonetic mishear resolution (uses pre-compiled _indexed_lexicon)
+        text = resolve_phonetic_mishears(text, self.BRAND_MAP, getattr(self, "_indexed_lexicon", None))
 
         text = self.re_vocab.sub(lambda m: self.HINGLISH_VOCAB_MAP.get(m.group(0).lower(), m.group(0)), text)
 
@@ -851,9 +955,18 @@ class HinglishPostProcessor:
             system_prompt += f"\nContext: {context_prompt}"
 
         if memory_hints:
-            canonical_terms = [getattr(item, "term", str(item)) for item in memory_hints]
+            canonical_terms = [getattr(item, "term", str(item)) for item in memory_hints if hasattr(item, "term")]
             if canonical_terms:
-                system_prompt += f"\nUser Jargon Lexicon: {', '.join(canonical_terms[:6])}"
+                system_prompt += "\n\n8. USER PERSONAL LEXICON & JARGON HINTS:\n"
+                system_prompt += f"Canonical Terms: {', '.join(canonical_terms)}\n"
+                for item in memory_hints:
+                    term = getattr(item, "term", None)
+                    variants = getattr(item, "phonetic_variants", [])
+                    if term and variants:
+                        var_str = ", ".join(f'"{v}"' for v in variants)
+                        system_prompt += f'- {var_str} -> "{term}"\n'
+                system_prompt += "\n9. DISAMBIGUATION & CONTEXT SAFETY RULES:\n"
+                system_prompt += "Do not rephrase or hallucinate beyond substituting spoken variants with their canonical terms."
 
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
