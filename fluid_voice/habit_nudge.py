@@ -97,6 +97,17 @@ class HabitNudgeEngine:
     def _on_key_press(self, key: Any) -> None:
         """Internal callback on physical keyboard key press."""
         with self._lock:
+            # Ignore shortcut hotkeys when modifier keys (Alt, Ctrl, Win) are held down
+            import sys
+            if sys.platform == "win32":
+                import ctypes
+                user32 = ctypes.windll.user32
+                is_alt = bool(user32.GetKeyState(0x12) & 0x8000)
+                is_ctrl = bool(user32.GetKeyState(0x11) & 0x8000)
+                is_win = bool(user32.GetKeyState(0x5B) & 0x8000) or bool(user32.GetKeyState(0x5C) & 0x8000)
+                if is_alt or is_ctrl or is_win:
+                    return
+
             # Ignore modifier keys (Alt, Ctrl, Shift, Super)
             key_str = str(key).lower()
             if any(mod in key_str for mod in ["alt", "ctrl", "shift", "cmd", "win", "caps_lock", "tab"]):
