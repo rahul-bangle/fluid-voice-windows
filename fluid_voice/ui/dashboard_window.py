@@ -26,34 +26,7 @@ except ImportError:
     QWebEngineView = None
 
 
-import http.server
-import socketserver
-import threading
 
-_LOCAL_SERVER_PORT = 8765
-_SERVER_STARTED = False
-_SERVER_LOCK = threading.Lock()
-
-def _ensure_local_http_server(root_dir: Path) -> int:
-    global _SERVER_STARTED
-    with _SERVER_LOCK:
-        if not _SERVER_STARTED:
-            class CustomHandler(http.server.SimpleHTTPRequestHandler):
-                def __init__(self, *args, **kwargs):
-                    super().__init__(*args, directory=str(root_dir), **kwargs)
-                def log_message(self, format, *args):
-                    pass # suppress verbose http logs
-
-            try:
-                httpd = socketserver.TCPServer(("127.0.0.1", _LOCAL_SERVER_PORT), CustomHandler)
-                t = threading.Thread(target=httpd.serve_forever, daemon=True)
-                t.start()
-                _SERVER_STARTED = True
-                logger.info(f"Started Velo AI Frontend HTTP server on port {_LOCAL_SERVER_PORT}")
-            except Exception as e:
-                logger.debug(f"HTTP Server port {_LOCAL_SERVER_PORT} already active: {e}")
-                _SERVER_STARTED = True
-    return _LOCAL_SERVER_PORT
 
 
 class VeloVoiceDashboardWindow(QMainWindow):
@@ -74,10 +47,9 @@ class VeloVoiceDashboardWindow(QMainWindow):
         self._init_ui()
 
     def _init_ui(self) -> None:
-        port = _ensure_local_http_server(self.frontend_dir)
-        url_str = f"http://127.0.0.1:{port}/velo_ai_dashboard_light_mode/code.html"
+        main_html = self.frontend_dir / "velo_ai_dashboard_light_mode" / "code.html"
 
-        if HAS_WEBENGINE:
+        if HAS_WEBENGINE and main_html.exists():
             self.web_view = QWebEngineView(self)
             
             # Enable local content access and smooth rendering
@@ -86,12 +58,13 @@ class VeloVoiceDashboardWindow(QMainWindow):
             settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
             settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
             
-            # Load main mockup HTML file via HTTP server
-            self.web_view.setUrl(QUrl(url_str))
+            # Read local HTML content directly and pass base local QUrl for bulletproof rendering
+            html_content = main_html.read_text(encoding="utf-8")
+            self.web_view.setHtml(html_content, QUrl.fromLocalFile(str(main_html)))
             self.setCentralWidget(self.web_view)
-            logger.info(f"Loaded pixel-perfect Velo AI HTML mockup from: {url_str}")
+            logger.info(f"Loaded pixel-perfect Velo AI HTML mockup from disk: {main_html}")
         else:
-            logger.error("WebEngine not installed")
+            logger.error(f"WebEngine or HTML mockup not found at {main_html}")
             fallback = QWidget(self)
             self.setCentralWidget(fallback)
 
@@ -107,7 +80,8 @@ class VeloVoiceDashboardWindow(QMainWindow):
         folder = page_map.get(page_name, "velo_ai_dashboard_light_mode")
         html_file = self.frontend_dir / folder / "code.html"
         if HAS_WEBENGINE and hasattr(self, "web_view") and html_file.exists():
-            self.web_view.setUrl(QUrl.fromLocalFile(str(html_file)))
+            html_content = html_file.read_text(encoding="utf-8")
+            self.web_view.setHtml(html_content, QUrl.fromLocalFile(str(html_file)))
 
     def closeEvent(self, event) -> None:
         """Hides window to system tray when user clicks close (X)."""
