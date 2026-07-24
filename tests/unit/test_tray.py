@@ -51,18 +51,17 @@ def test_tray_procedural_icon_generation_for_all_states(qapp):
 
 
 def test_tray_context_menu_structure_and_labels(qapp):
-    """Tier 1: Verifies context menu action hierarchy, header status, and labels."""
+    """Tier 1: Verifies context menu action hierarchy and labels."""
     tray = FluidVoiceTrayIcon()
     menu = tray.contextMenu()
     assert menu is not None
 
     actions = menu.actions()
-    assert len(actions) >= 5
-    assert actions[0].text() == "FluidVoice v0.1.0"
-    assert not actions[0].isEnabled()  # Disabled title header
-    assert actions[2].text() == "Toggle Recording"
-    assert actions[3].text() == "Settings..."
-    assert actions[5].text() == "Exit FluidVoice"
+    assert len(actions) >= 4
+    assert actions[0].text() == "Toggle Recording (Alt+S)"
+    assert actions[1].text() == "📊 Open Dashboard & History"
+    assert actions[2].text() == "⚙️ Settings..."
+    assert actions[4].text() == "🚪 Quit VeloVoice"
 
 
 def test_tray_signals_on_activation_trigger(qapp):
@@ -76,10 +75,10 @@ def test_tray_signals_on_activation_trigger(qapp):
 
 
 def test_tray_signals_on_activation_double_click(qapp):
-    """Tier 1: Verifies double click on tray icon emits settings_requested signal."""
+    """Tier 1: Verifies double click on tray icon emits dashboard_requested signal."""
     tray = FluidVoiceTrayIcon()
     mock_listener = MagicMock()
-    tray.settings_requested.connect(mock_listener)
+    tray.dashboard_requested.connect(mock_listener)
 
     tray._on_activated(QSystemTrayIcon.ActivationReason.DoubleClick)
     mock_listener.assert_called_once()
