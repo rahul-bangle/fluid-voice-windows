@@ -773,6 +773,10 @@ class HinglishPostProcessor:
         self.re_dev_latin1 = re.compile(r"([\u0900-\u097F])([a-zA-Z0-9])")
         self.re_dev_latin2 = re.compile(r"([a-zA-Z0-9])([\u0900-\u097F])")
 
+        # Whisper Hallucinations Regex
+        sorted_h = sorted(self.WHISPER_HALLUCINATIONS, key=len, reverse=True)
+        self.re_hallucinations = re.compile(r"(?:[\s,.:;!]|\b)(?:" + "|".join(re.escape(h) for h in sorted_h) + r")(?:[\s,.:;!]|$)", re.IGNORECASE)
+
     WHISPER_HALLUCINATIONS = (
         "murshid",
         "karahiya",
@@ -797,10 +801,13 @@ class HinglishPostProcessor:
             if lower_clean.strip(".,!?;:\"' ") == h or lower_clean == h:
                 return ""
 
-        # Strip hallucination phrases embedded or appended at the end
-        for h in self.WHISPER_HALLUCINATIONS:
-            pattern = re.compile(rf"(?:[\s,.:;!]|\b){re.escape(h)}(?:[\s,.:;!]|$)", re.IGNORECASE)
-            clean = pattern.sub(" ", clean)
+        # Strip hallucination phrases using pre-compiled regex
+        if hasattr(self, "re_hallucinations") and self.re_hallucinations:
+            clean = self.re_hallucinations.sub(" ", clean)
+        else:
+            for h in self.WHISPER_HALLUCINATIONS:
+                pattern = re.compile(rf"(?:[\s,.:;!]|\b){re.escape(h)}(?:[\s,.:;!]|$)", re.IGNORECASE)
+                clean = pattern.sub(" ", clean)
 
         clean = re.sub(r"\s+", " ", clean).strip()
         return clean
@@ -1027,7 +1034,11 @@ class HinglishPostProcessor:
                     memory_hints = None
 
         system_prompt = (
-            "Verbatim speech formatting engine. Fix punctuation/capitalization. Do NOT rephrase or converse. Output ONLY clean formatted text."
+            "You are FluidVoice, a strict Dictation Intent & Smart Formatting Engine. Output ONLY the final text with zero conversational filler or commentary.\n"
+            "RULES:\n"
+            "1. CONVERSATIONAL INTENT & SELF-CORRECTIONS: When the user corrects themselves ('no wait', 'actually', 'make it', 'scratch that', 'I mean'), output ONLY their final resolved intent (e.g. 'meet at 5... no wait 4' -> 'meet at 4').\n"
+            "2. SMART LIST FORMATTING: When the user speaks a list ('firstly', 'secondly', '1.', '2.', 'there are N items'), format as a clean numbered/bulleted list with newlines.\n"
+            "3. PRESERVE HINGLISH & JARGON: Keep the user's exact Hinglish vocabulary, technical terms, and tone."
         )
 
         if not context_prompt and context is not None:
@@ -1043,7 +1054,7 @@ class HinglishPostProcessor:
         if memory_hints:
             canonical_terms = [getattr(item, "term", str(item)) for item in memory_hints if hasattr(item, "term")]
             if canonical_terms:
-                system_prompt += "\n\n8. USER PERSONAL LEXICON & JARGON HINTS:\n"
+                system_prompt += "\n\nUSER PERSONAL LEXICON & JARGON HINTS:\n"
                 system_prompt += f"Canonical Terms: {', '.join(canonical_terms)}\n"
                 for item in memory_hints:
                     term = getattr(item, "term", None)
@@ -1051,8 +1062,6 @@ class HinglishPostProcessor:
                     if term and variants:
                         var_str = ", ".join(f'"{v}"' for v in variants)
                         system_prompt += f'- {var_str} -> "{term}"\n'
-                system_prompt += "\n9. DISAMBIGUATION & CONTEXT SAFETY RULES:\n"
-                system_prompt += "Do not rephrase or hallucinate beyond substituting spoken variants with their canonical terms."
 
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
@@ -1061,14 +1070,20 @@ class HinglishPostProcessor:
         }
         # Calculate low-latency max_tokens cap based on raw transcript word count
         word_count = len(raw_text.strip().split())
-        max_toks = max(32, min(256, word_count * 3 + 24))
+        max_toks = max(32, min(384, word_count * 3 + 48))
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": "Rajesh can we meet at 5 o'clock no wait make it 4 o'clock"},
+            {"role": "assistant", "content": "Rajesh, can we meet at 4 o'clock?"},
+            {"role": "user", "content": "there are 3 tasks first fix API second run tests third deploy"},
+            {"role": "assistant", "content": "There are 3 tasks:\n1. Fix API\n2. Run tests\n3. Deploy"},
+            {"role": "user", "content": f"TRANSCRIPT TO FORMAT:\n{raw_text}"}
+        ]
 
         payload = {
-            "model": "llama-3.1-8b-instant",
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"TRANSCRIPT TO FORMAT:\n{raw_text}"}
-            ],
+            "model": "llama-3.3-70b-versatile",
+            "messages": messages,
             "temperature": 0.0,
             "max_tokens": max_toks,
         }
