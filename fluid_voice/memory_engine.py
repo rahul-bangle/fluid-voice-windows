@@ -115,12 +115,17 @@ def diff_tokens(spoken_text: str, corrected_text: str) -> List[Tuple[str, str]]:
                         best_score = total_score
                         best_match = sub_spk
                 
-                if best_match and best_score >= 0.65:
+                if best_match and best_score >= 0.60:
                     pairs.append((best_match, cor))
                 else:
-                    pairs.append((spk, cor))
+                    logger.info(f"[PHONETIC GUARD] Intent rewrite detected ('{spk}' -> '{cor}', score={best_score:.2f} < 0.60). Skipping acoustic mishear memory save.")
             else:
-                pairs.append((spk, cor))
+                p1, s1 = double_metaphone(spk)
+                p2, s2 = double_metaphone(cor)
+                if ({p1, s1} & {p2, s2}) - {""}:
+                    pairs.append((spk, cor))
+                else:
+                    logger.info(f"[PHONETIC GUARD] Low sound similarity for full phrase ('{spk}' -> '{cor}'). Skipping memory save.")
 
     return pairs
 
