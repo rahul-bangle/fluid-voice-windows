@@ -104,6 +104,16 @@ class GroqSTTClient:
         self._session = session or requests.Session()
         self._session.headers.update(self._headers)
 
+        # Pre-warm TCP/TLS connection in background to eliminate 1.2s cold start delay on first dictation
+        import threading
+        threading.Thread(target=self._prewarm_connection, daemon=True).start()
+
+    def _prewarm_connection(self) -> None:
+        try:
+            self._session.head("https://api.groq.com/openai/v1/models", timeout=2.0)
+        except Exception:
+            pass
+
     def close(self) -> None:
         """Closes the HTTP session."""
         if self._session:

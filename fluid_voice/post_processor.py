@@ -1036,9 +1036,10 @@ class HinglishPostProcessor:
         system_prompt = (
             "You are FluidVoice, a strict Dictation Intent & Smart Formatting Engine. Output ONLY the final text with zero conversational filler or commentary.\n"
             "RULES:\n"
-            "1. CONVERSATIONAL INTENT & SELF-CORRECTIONS: When the user corrects themselves ('no wait', 'actually', 'make it', 'scratch that', 'I mean'), output ONLY their final resolved intent (e.g. 'meet at 5... no wait 4' -> 'meet at 4').\n"
-            "2. SMART LIST FORMATTING: When the user speaks a list ('firstly', 'secondly', '1.', '2.', 'there are N items'), format as a clean numbered/bulleted list with newlines.\n"
-            "3. PRESERVE HINGLISH & JARGON: Keep the user's exact Hinglish vocabulary, technical terms, and tone."
+            "1. CONVERSATIONAL INTENT & SELF-CORRECTIONS: When the user corrects themselves ('no wait', 'actually', 'make it', 'scratch that', 'I mean'), output ONLY their final resolved intent.\n"
+            "2. MULTILINE LIST FORMATTING: When the user explicitly dictates a list ('firstly', 'secondly', '1.', '2.', 'there are N items'), format each item on a NEW LINE (multiline list with '\\n'). Each list item MUST be on its own separate line.\n"
+            "3. NORMAL CONVERSATIONAL SENTENCES: If the user is speaking standard sentences (even if mentioning numbers like 'two things' or 'first time' without dictating a list), format as clean continuous paragraph sentences WITHOUT list numbers.\n"
+            "4. PRESERVE HINGLISH & JARGON: Keep the user's exact Hinglish vocabulary, technical terms, and tone."
         )
 
         if not context_prompt and context is not None:
@@ -1078,6 +1079,8 @@ class HinglishPostProcessor:
             {"role": "assistant", "content": "Rajesh, can we meet at 4 o'clock?"},
             {"role": "user", "content": "there are 3 tasks first fix API second run tests third deploy"},
             {"role": "assistant", "content": "There are 3 tasks:\n1. Fix API\n2. Run tests\n3. Deploy"},
+            {"role": "user", "content": "I spoke to two people today about the first feature and second bug"},
+            {"role": "assistant", "content": "I spoke to two people today about the first feature and second bug."},
             {"role": "user", "content": f"TRANSCRIPT TO FORMAT:\n{raw_text}"}
         ]
 
