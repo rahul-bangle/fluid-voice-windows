@@ -193,16 +193,83 @@ class AutoPaster:
             logger.error(f"Simulated typing failed: {e}")
             return False
 
+    def inject_unicode_text(self, text: str) -> bool:
+        """
+        Directly injects text into active window caret input queue via Win32 SendInput KEYEVENTF_UNICODE (<3ms).
+        Bypasses Windows clipboard completely.
+        """
+        if sys.platform != "win32" or not text:
+            return False
+        try:
+            import ctypes
+            from ctypes import wintype
+
+            class KEYBDINPUT(ctypes.Structure):
+                _fields_ = [
+                    ("wVk", wintype.WORD),
+                    ("wScan", wintype.WORD),
+                    ("dwFlags", wintype.DWORD),
+                    ("time", wintype.DWORD),
+                    ("dwExtraInfo", ctypes.c_ulonglong if sys.maxsize > 2**31 - 1 else ctypes.c_ulong),
+                ]
+
+            class HARDWAREINPUT(ctypes.Structure):
+                _fields_ = [
+                    ("uMsg", wintype.DWORD),
+                    ("wParamL", wintype.WORD),
+                    ("wParamH", wintype.WORD),
+                ]
+
+            class MOUSEINPUT(ctypes.Structure):
+                _fields_ = [
+                    ("dx", wintype.LONG),
+                    ("dy", wintype.LONG),
+                    ("mouseData", wintype.DWORD),
+                    ("dwFlags", wintype.DWORD),
+                    ("time", wintype.DWORD),
+                    ("dwExtraInfo", ctypes.c_ulonglong if sys.maxsize > 2**31 - 1 else ctypes.c_ulong),
+                ]
+
+            class INPUT_UNION(ctypes.Union):
+                _fields_ = [
+                    ("ki", KEYBDINPUT),
+                    ("mi", MOUSEINPUT),
+                    ("hi", HARDWAREINPUT),
+                ]
+
+            class INPUT(ctypes.Structure):
+                _fields_ = [
+                    ("type", wintype.DWORD),
+                    ("union", INPUT_UNION),
+                ]
+
+            INPUT_KEYBOARD = 1
+            KEYEVENTF_UNICODE = 0x0004
+            KEYEVENTF_KEYUP = 0x0002
+
+            user32 = ctypes.windll.user32
+            inputs = []
+            for ch in text:
+                code = ord(ch)
+                inputs.append(INPUT(type=INPUT_KEYBOARD, union=INPUT_UNION(ki=KEYBDINPUT(wVk=0, wScan=code, dwFlags=KEYEVENTF_UNICODE, time=0, dwExtraInfo=0))))
+                inputs.append(INPUT(type=INPUT_KEYBOARD, union=INPUT_UNION(ki=KEYBDINPUT(wVk=0, wScan=code, dwFlags=KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, time=0, dwExtraInfo=0))))
+
+            n_inputs = len(inputs)
+            if n_inputs == 0:
+                return False
+            arr = (INPUT * n_inputs)(*inputs)
+            inserted = user32.SendInput(n_inputs, ctypes.byref(arr), ctypes.sizeof(INPUT))
+            return inserted == n_inputs
+        except Exception as e:
+            logger.warning(f"SendInput UNICODE injection failed: {e}")
+            return False
+
     def paste_text(self, text: str, target_hwnd: Optional[int] = None) -> bool:
         """
         Executes complete auto-paste pipeline:
         1. Validates non-empty text.
-        2. Detects foreground active window.
-        3. Backs up existing clipboard text.
-        4. Sets new text to clipboard.
-        5. Restores target window focus.
-        6. Injects Ctrl+V.
-        7. Waits for target app to process Ctrl+V before restoring clipboard.
+        2. Tries Direct Win32 SendInput Unicode Injection (<3ms, zero clipboard touch).
+        3. Fallback: Backs up clipboard, sets text, restores target window, injects Ctrl+V, restores clipboard.
         """
         if not text or not text.strip():
             logger.info("Empty text provided to paste_text; skipping paste.")
@@ -212,6 +279,15 @@ class AutoPaster:
 
         current_hwnd, _ = self.get_active_window()
         target_hwnd = target_hwnd if (target_hwnd is not None and target_hwnd != 0) else current_hwnd
+
+        if target_hwnd and target_hwnd != 0:
+            self.restore_active_window(target_hwnd)
+
+        # Primary Fast Path: Try Win32 SendInput Unicode injection (<3ms)
+        if self.inject_unicode_text(text):
+            elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+            logger.info(f"Direct SendInput typed '{text[:30]}...' in {elapsed_ms:.2f}ms (Zero Clipboard)")
+            return True
 
         old_clipboard = self.get_clipboard_text()
 

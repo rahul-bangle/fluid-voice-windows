@@ -486,6 +486,10 @@ class FluidVoiceApp(QObject):
                 if hasattr(self, "sfx_engine") and self.sfx_engine:
                     self.sfx_engine.play("paste")
 
+                # Snapshot for Phase 2: Autonomous 5-Second Post-Paste Auto-Learning Engine
+                self._last_paste_snapshot = (cleaned_text, raw_text, time.time())
+                QTimer.singleShot(5000, self._check_passive_learning_snapshot)
+
                 self.set_state(AppState.IDLE, "FluidVoice is ready")
             else:
                 if self.overlay_widget:
@@ -544,6 +548,26 @@ class FluidVoiceApp(QObject):
 
         logger.info(f"Learned correction from clipboard: '{spoken_text}' -> '{corrected_text}'")
         return item
+
+    @pyqtSlot()
+    def _check_passive_learning_snapshot(self) -> None:
+        """
+        Phase 2: Autonomous 5-Second Post-Paste Auto-Learning Engine.
+        5 seconds after auto-pasting, checks if user modified/corrected text via clipboard/caret.
+        """
+        if not hasattr(self, "_last_paste_snapshot") or not self._last_paste_snapshot:
+            return
+        pasted_text, raw_text, t_paste = self._last_paste_snapshot
+        self._last_paste_snapshot = None
+
+        try:
+            clipboard = self.qt_app.clipboard()
+            curr_clip = clipboard.text() if clipboard else ""
+            if curr_clip and curr_clip != pasted_text and len(curr_clip.strip().split()) <= 10:
+                logger.info(f"[PASSIVE AUTO-LEARNING] Detected post-paste text edit: '{curr_clip}' (Original: '{pasted_text}')")
+                self.learn_from_clipboard(curr_clip)
+        except Exception as e:
+            logger.debug(f"Passive learning snapshot check skipped: {e}")
 
     def _handle_pipeline_error(self, err: Exception) -> None:
         err_msg = str(err)
