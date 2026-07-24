@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>VeloVoice - Live Recording</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed-variant": "#7d2d00",
+                        "inverse-on-surface": "#eff1f3",
+                        "surface-variant": "#e0e3e5",
+                        "on-error": "#ffffff",
+                        "outline": "#737686",
+                        "on-primary": "#ffffff",
+                        "primary-fixed-dim": "#b4c5ff",
+                        "on-secondary-fixed": "#07006c",
+                        "surface-container": "#eceef0",
+                        "on-secondary-fixed-variant": "#2f2ebe",
+                        "tertiary-fixed": "#ffdbcd",
+                        "tertiary-fixed-dim": "#ffb596",
+                        "on-tertiary": "#ffffff",
+                        "inverse-surface": "#2d3133",
+                        "surface-tint": "#0053db",
+                        "on-primary-fixed-variant": "#003ea8",
+                        "surface": "#f7f9fb",
+                        "surface-bright": "#f7f9fb",
+                        "secondary-fixed-dim": "#c0c1ff",
+                        "on-secondary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "inverse-primary": "#b4c5ff",
+                        "primary": "#004ac6",
+                        "secondary-fixed": "#e1e0ff",
+                        "on-secondary-container": "#fffbff",
+                        "primary-container": "#2563eb",
+                        "surface-container-highest": "#e0e3e5",
+                        "on-tertiary-container": "#ffede6",
+                        "on-surface-variant": "#434655",
+                        "tertiary-container": "#bc4800",
+                        "primary-fixed": "#dbe1ff",
+                        "on-primary-container": "#eeefff",
+                        "on-surface": "#191c1e",
+                        "tertiary": "#943700",
+                        "surface-dim": "#d8dadc",
+                        "surface-container-low": "#f2f4f6",
+                        "secondary-container": "#6063ee",
+                        "on-tertiary-fixed": "#360f00",
+                        "surface-container-lowest": "#ffffff",
+                        "on-background": "#191c1e",
+                        "background": "#f7f9fb",
+                        "secondary": "#4648d4",
+                        "outline-variant": "#c3c6d7",
+                        "on-primary-fixed": "#00174b",
+                        "surface-container-high": "#e6e8ea",
+                        "error": "#ba1a1a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xs": "8px",
+                        "sm": "12px",
+                        "md": "16px",
+                        "xl": "32px",
+                        "gutter": "20px",
+                        "container-max": "1280px",
+                        "base": "4px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-xl": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "mono-data": ["Geist"],
+                        "title-md": ["Inter"],
+                        "label-caps": ["Geist"],
+                        "headline-lg-mobile": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-xl": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "mono-data": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "title-md": ["18px", { "lineHeight": "26px", "fontWeight": "600" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=Geist:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .waveform-bar {
+            animation: pulse-wave 1.2s ease-in-out infinite alternate;
+            transform-origin: center;
+        }
+        
+        .waveform-bar:nth-child(1) { animation-delay: 0.1s; height: 40%; }
+        .waveform-bar:nth-child(2) { animation-delay: 0.3s; height: 70%; }
+        .waveform-bar:nth-child(3) { animation-delay: 0.0s; height: 100%; }
+        .waveform-bar:nth-child(4) { animation-delay: 0.4s; height: 80%; }
+        .waveform-bar:nth-child(5) { animation-delay: 0.2s; height: 50%; }
+
+        @keyframes pulse-wave {
+            0% { transform: scaleY(0.4); opacity: 0.7; }
+            100% { transform: scaleY(1); opacity: 1; }
+        }
+
+        .glass-pill {
+            background: rgba(15, 23, 42, 0.7); /* dark slate-ish base */
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-background min-h-screen flex flex-col font-sans antialiased text-on-surface overflow-hidden relative">
+<!-- Mock Background Content to show context -->
+<div class="absolute inset-0 p-xl flex flex-col gap-lg opacity-20 pointer-events-none">
+<div class="h-16 w-full max-w-container-max mx-auto bg-surface-container rounded-lg"></div>
+<div class="flex-1 w-full max-w-container-max mx-auto grid grid-cols-12 gap-gutter">
+<div class="col-span-3 h-full bg-surface-container rounded-lg hidden md:block"></div>
+<div class="col-span-12 md:col-span-9 h-full bg-surface-container rounded-lg"></div>
+</div>
+</div>
+<!-- Floating Dictation Pill -->
+<div class="fixed bottom-xl left-1/2 transform -translate-x-1/2 z-50 pointer-events-auto">
+<div class="glass-pill backdrop-blur-2xl rounded-full h-[52px] px-6 flex items-center gap-4 cursor-pointer transition-transform hover:scale-105 border border-white/5">
+<!-- Microphone Icon -->
+<div class="flex items-center justify-center w-8 h-8 rounded-full bg-primary/20 text-primary-fixed-dim">
+<span class="material-symbols-outlined" data-icon="mic" data-weight="fill" style="font-variation-settings: 'FILL' 1;">mic</span>
+</div>
+<!-- Live Waveform -->
+<div class="flex items-center justify-center h-6 gap-[3px] w-12">
+<div class="waveform-bar w-1 bg-primary-fixed-dim rounded-full"></div>
+<div class="waveform-bar w-1 bg-primary-fixed-dim rounded-full"></div>
+<div class="waveform-bar w-[5px] bg-primary rounded-full"></div>
+<div class="waveform-bar w-1 bg-primary-fixed-dim rounded-full"></div>
+<div class="waveform-bar w-1 bg-primary-fixed-dim rounded-full"></div>
+</div>
+<!-- Timer/Status text (optional but good for context) -->
+<div class="font-mono-data text-mono-data text-primary-fixed-dim opacity-80 pl-2">
+                00:14
+            </div>
+</div>
+</div>
+</body></html>

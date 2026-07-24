@@ -21,6 +21,7 @@ class FluidVoiceTrayIcon(QSystemTrayIcon):
     """
     recording_toggled = pyqtSignal()
     settings_requested = pyqtSignal()
+    dashboard_requested = pyqtSignal()
     exit_requested = pyqtSignal()
 
     def __init__(self, parent: QObject | None = None):
@@ -33,21 +34,19 @@ class FluidVoiceTrayIcon(QSystemTrayIcon):
     def _init_menu(self) -> None:
         menu = QMenu()
 
-        # Header (Disabled title)
-        header = menu.addAction("FluidVoice v0.1.0")
-        header.setEnabled(False)
-        menu.addSeparator()
-
         # Context Menu Actions
-        self.toggle_action = menu.addAction("Toggle Recording")
+        self.toggle_action = menu.addAction("Toggle Recording (Alt+S)")
         self.toggle_action.triggered.connect(self.recording_toggled.emit)
 
-        self.settings_action = menu.addAction("Settings...")
+        self.dashboard_action = menu.addAction("📊 Open Dashboard & History")
+        self.dashboard_action.triggered.connect(self.dashboard_requested.emit)
+
+        self.settings_action = menu.addAction("⚙️ Settings...")
         self.settings_action.triggered.connect(self.settings_requested.emit)
 
         menu.addSeparator()
 
-        exit_action = menu.addAction("Exit FluidVoice")
+        exit_action = menu.addAction("🚪 Quit VeloVoice")
         exit_action.triggered.connect(self.exit_requested.emit)
 
         self.setContextMenu(menu)
@@ -56,7 +55,7 @@ class FluidVoiceTrayIcon(QSystemTrayIcon):
         if reason == QSystemTrayIcon.ActivationReason.Trigger:  # Single click
             self.recording_toggled.emit()
         elif reason == QSystemTrayIcon.ActivationReason.DoubleClick:  # Double click
-            self.settings_requested.emit()
+            self.dashboard_requested.emit()
 
     @staticmethod
     def create_state_icon(state: TrayState) -> QIcon:

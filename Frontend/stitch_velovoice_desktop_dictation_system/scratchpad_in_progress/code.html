@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>VeloVoice - Scratchpad Preview</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;family=Geist:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-fixed-dim": "#b4c5ff",
+                        "tertiary-fixed-dim": "#ffb596",
+                        "surface-bright": "#f7f9fb",
+                        "on-secondary-container": "#fffbff",
+                        "on-primary-container": "#eeefff",
+                        "surface-dim": "#d8dadc",
+                        "secondary-container": "#6063ee",
+                        "error": "#ba1a1a",
+                        "outline-variant": "#c3c6d7",
+                        "on-primary": "#ffffff",
+                        "on-surface": "#191c1e",
+                        "error-container": "#ffdad6",
+                        "secondary-fixed-dim": "#c0c1ff",
+                        "primary": "#004ac6",
+                        "inverse-primary": "#b4c5ff",
+                        "on-tertiary-fixed-variant": "#7d2d00",
+                        "surface-container-low": "#f2f4f6",
+                        "on-secondary-fixed-variant": "#2f2ebe",
+                        "outline": "#737686",
+                        "inverse-on-surface": "#eff1f3",
+                        "surface-tint": "#0053db",
+                        "tertiary-container": "#bc4800",
+                        "on-tertiary-container": "#ffede6",
+                        "secondary": "#4648d4",
+                        "on-error-container": "#93000a",
+                        "on-error": "#ffffff",
+                        "surface-container-highest": "#e0e3e5",
+                        "surface-variant": "#e0e3e5",
+                        "tertiary": "#943700",
+                        "primary-container": "#2563eb",
+                        "surface": "#f7f9fb",
+                        "on-tertiary": "#ffffff",
+                        "inverse-surface": "#2d3133",
+                        "on-surface-variant": "#434655",
+                        "on-secondary-fixed": "#07006c",
+                        "surface-container": "#eceef0",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary-fixed": "#00174b",
+                        "secondary-fixed": "#e1e0ff",
+                        "on-background": "#191c1e",
+                        "background": "#f7f9fb",
+                        "on-tertiary-fixed": "#360f00",
+                        "surface-container-high": "#e6e8ea",
+                        "tertiary-fixed": "#ffdbcd",
+                        "primary-fixed": "#dbe1ff",
+                        "on-secondary": "#ffffff",
+                        "on-primary-fixed-variant": "#003ea8"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "xl": "32px",
+                        "xs": "8px",
+                        "sm": "12px",
+                        "lg": "24px",
+                        "gutter": "20px",
+                        "container-max": "1280px",
+                        "md": "16px",
+                        "base": "4px"
+                    },
+                    "fontFamily": {
+                        "title-md": ["Inter"],
+                        "label-caps": ["Geist"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "mono-data": ["Geist"],
+                        "body-sm": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "headline-xl": ["Inter"]
+                    },
+                    "fontSize": {
+                        "title-md": ["18px", {"lineHeight": "26px", "fontWeight": "600"}],
+                        "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "mono-data": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "headline-lg": ["28px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "headline-xl": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #f7f9fb;
+            font-family: 'Inter', sans-serif;
+            color: #191c1e;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+        }
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .animate-float {
+            animation: float 4s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body class="bg-background overflow-hidden">
+<!-- Navigation Shell: SideNavBar -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-surface-container/60 backdrop-blur-xl border-r border-white/10 backdrop-saturate-150 shadow-2xl flex flex-col py-6 z-50">
+<div class="px-6 mb-10">
+<h1 class="font-display-lg text-headline-sm font-bold text-primary tracking-tight">VeloVoice</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant opacity-70">AI-Native Dictation</p>
+</div>
+<nav class="flex-1 space-y-1 px-4">
+<a class="group flex items-center px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="dashboard">dashboard</span>
+<span class="font-body-sm text-body-sm">Dashboard</span>
+</a>
+<a class="group flex items-center px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="dictionary">dictionary</span>
+<span class="font-body-sm text-body-sm">Vocabulary</span>
+</a>
+<!-- Active State: Scratchpad (Mapped to logic: if not in JSON, it's the target module) -->
+<a class="group flex items-center px-4 py-3 rounded-lg text-primary bg-primary/10 border-r-2 border-primary transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="edit_note">edit_note</span>
+<span class="font-body-sm text-body-sm">Scratchpad</span>
+</a>
+<a class="group flex items-center px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="tune">tune</span>
+<span class="font-body-sm text-body-sm">Presets</span>
+</a>
+<a class="group flex items-center px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="history">history</span>
+<span class="font-body-sm text-body-sm">History</span>
+</a>
+<a class="group flex items-center px-4 py-3 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined mr-3" data-icon="settings">settings</span>
+<span class="font-body-sm text-body-sm">Settings</span>
+</a>
+</nav>
+<div class="px-4 mt-auto">
+<button class="w-full py-3 bg-primary text-white rounded-xl font-title-md text-sm active:scale-95 transition-transform flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[20px]" data-icon="add_circle">add_circle</span>
+                New Recording
+            </button>
+<div class="mt-6 flex items-center gap-3 px-2">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional studio portrait of a young executive with a clean, modern aesthetic. The lighting is soft and high-key, set against a minimalist light-grey office background that complements a sleek corporate UI. The subject wears a sharp indigo blazer, reflecting the brand's primary color palette." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBtoTUFb20m4TcTCAJh-W3AgI3q6-XyPmL2elbb-W1FHloLnnhueJSaI8IhN2W7D4YRd4H4kdcBZkVrVpa0rlB-s3MuPBxha5lAbG6dUDoZg5uiiTNy0p9dSU2VY8tZY0hW6goN-G-q7rXYhk_AYrmdsUdzSFzG-Ng0LlbW_OIN-PCIALQBro3KYr51GlCsbmfKMmD5h2LL26lA6iIFret1qCMKaytQ_iUMsgGQRm5f4kJzpZMDs1HjBeGARKyL625xxeLyPC-RZeQ"/>
+</div>
+<div>
+<p class="font-body-sm text-xs font-bold text-on-surface">Alex Rivera</p>
+<p class="font-body-sm text-[10px] text-on-surface-variant">Pro Plan</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Top Navigation Bar -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] backdrop-blur-md bg-background/20 z-40">
+<div class="flex justify-between items-center h-16 px-8">
+<div class="flex items-center gap-2">
+<span class="text-on-surface-variant font-body-sm">Modules</span>
+<span class="material-symbols-outlined text-on-surface-variant text-sm" data-icon="chevron_right">chevron_right</span>
+<span class="text-primary font-bold font-body-sm">Scratchpad</span>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary transition-opacity" data-icon="notifications">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-error rounded-full"></span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary transition-opacity" data-icon="account_circle">account_circle</span>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="ml-64 pt-16 h-screen overflow-y-auto bg-surface-bright">
+<div class="max-w-container-max mx-auto px-xl py-xl min-h-[calc(100vh-64px)] flex flex-col items-center justify-center">
+<!-- Hero Content -->
+<div class="text-center mb-12 relative">
+<!-- Abstract Background Ornament -->
+<div class="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-primary/5 rounded-full blur-3xl -z-10"></div>
+<div class="inline-flex items-center gap-2 px-4 py-2 bg-secondary-fixed text-on-secondary-fixed rounded-full mb-6 animate-float">
+<span class="material-symbols-outlined text-[18px]" data-icon="auto_awesome">auto_awesome</span>
+<span class="font-label-caps text-label-caps">COMING SOON</span>
+</div>
+<h2 class="font-headline-xl text-headline-xl text-on-surface mb-4 tracking-tight">
+                    Scratchpad is coming in <span class="text-primary">v2.0.</span>
+</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-lg mx-auto">
+                    A persistent space for your voice drafts is in the works. Transform raw thoughts into structured notes instantly.
+                </p>
+</div>
+<!-- Bento Preview Grid -->
+<div class="grid grid-cols-12 gap-gutter w-full max-w-4xl">
+<!-- Large Feature Preview Card -->
+<div class="col-span-8 h-80 rounded-xl glass-panel p-lg shadow-sm flex flex-col justify-between overflow-hidden relative group">
+<div class="relative z-10">
+<h3 class="font-title-md text-title-md text-on-surface mb-2">Live Canvas Interface</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Real-time transcription mapping to structured document blocks.</p>
+</div>
+<!-- Decorative Mockup Element -->
+<div class="absolute -bottom-10 right-4 w-3/4 bg-white rounded-t-xl border border-outline-variant shadow-2xl p-4 transition-transform group-hover:-translate-y-4 duration-500">
+<div class="flex gap-2 mb-4">
+<div class="w-3 h-3 rounded-full bg-error/20"></div>
+<div class="w-3 h-3 rounded-full bg-tertiary-fixed-dim"></div>
+<div class="w-3 h-3 rounded-full bg-primary/20"></div>
+</div>
+<div class="space-y-3">
+<div class="h-2 w-full bg-surface-container rounded-full"></div>
+<div class="h-2 w-5/6 bg-surface-container rounded-full"></div>
+<div class="h-2 w-4/6 bg-primary/10 rounded-full"></div>
+<div class="h-2 w-full bg-surface-container rounded-full"></div>
+</div>
+</div>
+<div class="flex gap-4 mt-auto">
+<div class="px-3 py-1 bg-primary-fixed text-on-primary-fixed-variant font-label-caps text-[10px] rounded">PERSISTENT DRAFTS</div>
+<div class="px-3 py-1 bg-surface-container-high text-on-surface-variant font-label-caps text-[10px] rounded">AUTO-TAGGING</div>
+</div>
+</div>
+<!-- Small Feature Preview Card -->
+<div class="col-span-4 h-80 rounded-xl bg-primary text-white p-lg shadow-xl flex flex-col relative overflow-hidden">
+<div class="relative z-10">
+<span class="material-symbols-outlined text-[40px] mb-4 opacity-80" data-icon="mic_external_on">mic_external_on</span>
+<h3 class="font-title-md text-title-md mb-2">Voice First</h3>
+<p class="font-body-sm text-body-sm opacity-80">Optimized for rapid capture without looking at the screen.</p>
+</div>
+<!-- Atmospheric Glow -->
+<div class="absolute -bottom-20 -right-20 w-40 h-40 bg-white/20 rounded-full blur-3xl"></div>
+<div class="mt-auto z-10">
+<button class="w-full py-2 bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg font-label-caps text-label-caps transition-colors">
+                            VIEW ROADMAP
+                        </button>
+</div>
+</div>
+<!-- Bottom Row Card: Integration -->
+<div class="col-span-12 h-48 rounded-xl glass-panel flex items-center p-xl relative overflow-hidden">
+<div class="flex-1">
+<h3 class="font-title-md text-title-md text-on-surface mb-2">Semantic Search Integration</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant max-w-md">Find any draft by context, not just keywords. Your Scratchpad will be fully indexable by the Velo AI core.</p>
+</div>
+<div class="flex -space-x-4">
+<div class="w-16 h-16 rounded-full glass-panel flex items-center justify-center shadow-lg transform rotate-[-12deg] z-10">
+<span class="material-symbols-outlined text-primary text-3xl" data-icon="search">search</span>
+</div>
+<div class="w-16 h-16 rounded-full glass-panel flex items-center justify-center shadow-lg transform rotate-[8deg] z-20">
+<span class="material-symbols-outlined text-secondary text-3xl" data-icon="psychology">psychology</span>
+</div>
+<div class="w-16 h-16 rounded-full glass-panel flex items-center justify-center shadow-lg transform rotate-[-5deg] z-30 border-primary/20">
+<span class="material-symbols-outlined text-tertiary text-3xl" data-icon="bolt">bolt</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Notify Me Section -->
+<div class="mt-16 w-full max-w-lg">
+<div class="bg-white p-2 rounded-2xl border border-outline-variant flex items-center shadow-sm">
+<input class="flex-1 border-none focus:ring-0 font-body-sm text-body-sm px-4 text-on-surface-variant" placeholder="Get notified when we launch..." type="email"/>
+<button class="px-6 py-3 bg-primary text-white rounded-xl font-label-caps text-label-caps hover:bg-primary-container transition-all">
+                        NOTIFY ME
+                    </button>
+</div>
+<p class="text-center mt-4 font-body-sm text-[11px] text-on-surface-variant/60 uppercase tracking-widest">
+                    Privacy guaranteed. No spam. Just updates.
+                </p>
+</div>
+</div>
+</main>
+<!-- Micro-interaction Script -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const input = document.querySelector('input');
+            const button = input.nextElementSibling;
+
+            button.addEventListener('mouseenter', () => {
+                button.classList.add('scale-105');
+            });
+            button.addEventListener('mouseleave', () => {
+                button.classList.remove('scale-105');
+            });
+
+            // Smooth scale effect for cards on hover
+            const cards = document.querySelectorAll('.glass-panel');
+            cards.forEach(card => {
+                card.addEventListener('mouseenter', () => {
+                    card.style.transform = 'translateY(-2px)';
+                    card.style.transition = 'all 0.3s ease';
+                });
+                card.addEventListener('mouseleave', () => {
+                    card.style.transform = 'translateY(0px)';
+                });
+            });
+        });
+    </script>
+</body></html>

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Snippets - VeloVoice</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Geist:wght@400;600&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body {
+            background-color: #f7f9fb;
+            color: #191c1e;
+            overflow: hidden;
+        }
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 16px;
+        }
+        .glow-pulse {
+            animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.05); }
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary": "#004ac6",
+                        "on-primary": "#ffffff",
+                        "primary-container": "#2563eb",
+                        "secondary": "#4648d4",
+                        "surface": "#f7f9fb",
+                        "surface-container": "#eceef0",
+                        "surface-container-low": "#f2f4f6",
+                        "on-surface": "#191c1e",
+                        "on-surface-variant": "#434655",
+                        "outline": "#737686",
+                        "outline-variant": "#c3c6d7",
+                        "background": "#f7f9fb"
+                    },
+                    "fontFamily": {
+                        "title-md": ["Inter"],
+                        "label-caps": ["Geist"],
+                        "body-lg": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "headline-xl": ["Inter"]
+                    },
+                    "fontSize": {
+                        "title-md": ["18px", {"lineHeight": "26px", "fontWeight": "600"}],
+                        "label-caps": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "body-sm": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "headline-lg": ["28px", {"lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "headline-xl": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="font-body-sm text-on-surface">
+<!-- SideNavBar Shell -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-surface-container/60 backdrop-blur-xl border-r border-white/10 backdrop-saturate-150 shadow-2xl flex flex-col py-6 z-50">
+<div class="px-6 mb-8">
+<h1 class="font-display-lg text-headline-sm font-bold text-primary tracking-tight">VeloVoice</h1>
+<p class="text-xs text-on-surface-variant/70 uppercase tracking-widest mt-1">AI-Native Dictation</p>
+</div>
+<nav class="flex-1 space-y-1 px-4">
+<!-- Nav Items -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors duration-200 active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-body-sm">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors duration-200 active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined">dictionary</span>
+<span class="font-body-sm">Vocabulary</span>
+</a>
+<!-- ACTIVE TAB: Snippets (Mapping to 'Presets' or identified intent) -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-primary bg-primary/10 border-r-2 border-primary transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">tune</span>
+<span class="font-body-sm font-semibold">Snippets</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors duration-200 active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="font-body-sm">History</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/5 transition-colors duration-200 active:scale-95 transition-transform" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-sm">Settings</span>
+</a>
+</nav>
+<div class="px-4 mt-auto">
+<button class="w-full py-3 bg-primary text-white rounded-xl font-semibold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 hover:bg-primary-container transition-all active:scale-95">
+<span class="material-symbols-outlined">mic</span>
+                New Recording
+            </button>
+<div class="mt-6 flex items-center gap-3 px-2 py-3 border-t border-outline-variant/30">
+<div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-sm">person</span>
+</div>
+<div class="flex flex-col">
+<span class="text-xs font-bold">Alex Chen</span>
+<span class="text-[10px] text-on-surface-variant">Pro Plan</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 min-h-screen bg-surface flex items-center justify-center p-xl overflow-hidden relative">
+<!-- Subtle background texture -->
+<div class="absolute inset-0 opacity-[0.03] pointer-events-none" style="background-image: radial-gradient(#004ac6 1px, transparent 1px); background-size: 24px 24px;"></div>
+<!-- Centered Work in Progress Section -->
+<div class="max-w-4xl w-full flex flex-col items-center text-center relative z-10">
+<!-- Animated Visual Element -->
+<div class="relative mb-12">
+<div class="absolute -inset-8 bg-primary/5 rounded-full blur-3xl glow-pulse"></div>
+<div class="relative bg-white border border-outline-variant/30 rounded-[2rem] p-10 shadow-xl overflow-hidden">
+<div class="flex items-center justify-center h-48 w-48 mx-auto">
+<div class="relative">
+<!-- Central Icon -->
+<span class="material-symbols-outlined text-primary text-[80px] z-20 relative">auto_awesome</span>
+<!-- Orbiting Elements -->
+<div class="absolute inset-0 border-2 border-dashed border-primary/20 rounded-full animate-[spin_20s_linear_infinite]"></div>
+<div class="absolute -top-4 -right-4 bg-secondary/10 p-2 rounded-lg border border-secondary/20 shadow-sm animate-bounce duration-1000">
+<span class="material-symbols-outlined text-secondary text-sm">bolt</span>
+</div>
+<div class="absolute -bottom-2 -left-6 bg-primary/10 p-2 rounded-lg border border-primary/20 shadow-sm animate-pulse">
+<span class="material-symbols-outlined text-primary text-sm">code</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Beta Message -->
+<div class="space-y-4">
+<div class="inline-flex items-center px-4 py-1.5 rounded-full bg-primary/5 border border-primary/20 text-primary font-label-caps text-xs tracking-widest mb-2">
+                    PRIVATE BETA PHASE
+                </div>
+<h2 class="font-headline-xl text-headline-xl text-on-surface">Snippets are coming soon</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-lg mx-auto">
+                    We're refining the snippet expansion engine for <span class="text-primary font-semibold">sub-100ms latency</span> to ensure your workflow remains fluid and uninterrupted.
+                </p>
+</div>
+<!-- Bento Status Cards -->
+<div class="mt-16 grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+<!-- Status 1 -->
+<div class="bg-white p-6 rounded-2xl border border-outline-variant/40 shadow-sm flex flex-col items-start text-left hover:border-primary/30 transition-all group">
+<div class="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center mb-4 group-hover:bg-primary/5 transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary">speed</span>
+</div>
+<h3 class="font-title-md text-title-md mb-2">Expansion Speed</h3>
+<p class="text-xs text-on-surface-variant">Currently optimizing LLM context injection for instant text replacement.</p>
+<div class="mt-4 w-full h-1 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[85%] rounded-full"></div>
+</div>
+<span class="mt-2 text-[10px] text-on-surface-variant/60 font-semibold">85% COMPLETE</span>
+</div>
+<!-- Status 2 -->
+<div class="bg-white p-6 rounded-2xl border border-outline-variant/40 shadow-sm flex flex-col items-start text-left hover:border-primary/30 transition-all group">
+<div class="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center mb-4 group-hover:bg-primary/5 transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary">dynamic_feed</span>
+</div>
+<h3 class="font-title-md text-title-md mb-2">Context Engine</h3>
+<p class="text-xs text-on-surface-variant">Smart snippets that adapt based on the project you are currently working on.</p>
+<div class="mt-4 w-full h-1 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[60%] rounded-full"></div>
+</div>
+<span class="mt-2 text-[10px] text-on-surface-variant/60 font-semibold">60% COMPLETE</span>
+</div>
+<!-- Status 3 -->
+<div class="bg-white p-6 rounded-2xl border border-outline-variant/40 shadow-sm flex flex-col items-start text-left hover:border-primary/30 transition-all group">
+<div class="w-10 h-10 rounded-xl bg-surface-container flex items-center justify-center mb-4 group-hover:bg-primary/5 transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary">lock</span>
+</div>
+<h3 class="font-title-md text-title-md mb-2">Private Beta</h3>
+<p class="text-xs text-on-surface-variant">Snippets are currently in private beta for select VeloVoice Pro users.</p>
+<button class="mt-4 text-primary text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 hover:gap-2 transition-all">
+                        Request Access <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Bottom decorative line -->
+<div class="mt-16 flex items-center gap-4 w-full opacity-30">
+<div class="flex-1 h-[1px] bg-gradient-to-r from-transparent via-outline-variant to-outline-variant"></div>
+<div class="w-2 h-2 rounded-full border border-outline-variant"></div>
+<div class="flex-1 h-[1px] bg-gradient-to-l from-transparent via-outline-variant to-outline-variant"></div>
+</div>
+</div>
+<!-- Top Right Actions (Mock TopNavBar Trailing Icons) -->
+<div class="fixed top-6 right-8 flex items-center gap-4">
+<button class="w-10 h-10 rounded-full bg-white border border-outline-variant/30 flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-white border border-outline-variant/30 flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</main>
+<!-- Floating Help Button -->
+<button class="fixed bottom-8 right-8 w-12 h-12 bg-white text-on-surface shadow-lg rounded-full flex items-center justify-center border border-outline-variant/20 hover:bg-surface-container transition-transform active:scale-90">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+<script>
+        // Micro-interactions for the "Beta" card
+        const cards = document.querySelectorAll('.bg-white.p-6');
+        cards.forEach(card => {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                card.style.setProperty('--mouse-x', `${x}px`);
+                card.style.setProperty('--mouse-y', `${y}px`);
+            });
+        });
+
+        // Simple typing effect for the subtitle or status message can be added here if needed
+        console.log("VeloVoice Snippets Module: Development State Loaded.");
+    </script>
+</body></html>

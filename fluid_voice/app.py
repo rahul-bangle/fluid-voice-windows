@@ -164,6 +164,7 @@ class FluidVoiceApp(QObject):
         if self.tray_icon is None:
             self.tray_icon = FluidVoiceTrayIcon()
         self.tray_icon.recording_toggled.connect(self.toggle_recording)
+        self.tray_icon.dashboard_requested.connect(self.open_dashboard)
         self.tray_icon.settings_requested.connect(self.open_settings)
         self.tray_icon.exit_requested.connect(self.quit)
         self.tray_icon.show()
@@ -635,6 +636,17 @@ class FluidVoiceApp(QObject):
         self.set_state(AppState.ERROR, f"Error: {err_msg}")
         if self.overlay_widget:
             self.overlay_widget.set_state("error", f"Error: {err_msg}")
+
+    def open_dashboard(self) -> None:
+        """Opens/restores single-instance VeloVoice Dashboard window."""
+        logger.info("Open VeloVoice Dashboard requested")
+        if not hasattr(self, "_dashboard_window") or self._dashboard_window is None:
+            from fluid_voice.ui.dashboard_window import VeloVoiceDashboardWindow
+            self._dashboard_window = VeloVoiceDashboardWindow(app_controller=self)
+        
+        self._dashboard_window.show()
+        self._dashboard_window.raise_()
+        self._dashboard_window.activateWindow()
 
     def open_settings(self) -> None:
         logger.info("Open settings dialog requested")
