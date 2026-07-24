@@ -57,7 +57,7 @@ class HabitNudgeEngine:
             return True
 
         try:
-            self._listener = keyboard.Listener(on_press=self._on_key_press)
+            self._listener = keyboard.Listener(on_press=self._handle_key)
             self._listener.daemon = True
             self._listener.start()
             logger.info("HabitNudgeEngine started (threshold: >5 keys).")
@@ -84,6 +84,10 @@ class HabitNudgeEngine:
             self._key_count = 0
             self._nudge_shown = False
             logger.debug("[HABIT NUDGE] Nudge state reset after Alt+S voice dictation.")
+
+    def _handle_key(self, key: Any) -> None:
+        """Callback wrapper for pynput keyboard listener."""
+        self._on_key_press(key)
 
     def _on_key_press(self, key: Any) -> None:
         """Internal callback on physical keyboard key press."""

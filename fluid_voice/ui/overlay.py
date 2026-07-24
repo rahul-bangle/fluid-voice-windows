@@ -349,6 +349,17 @@ class OverlayWidget(QWidget):
         if self._state == OverlayState.LISTENING:
             self._waveform.set_level(level)
 
+    def show_toast(self, message: str, duration_ms: int = 2500) -> None:
+        """
+        Displays a floating glass toast notification pill for duration_ms
+        without stealing window focus.
+        """
+        self._message = message
+        self._lbl_status.setText(message)
+        self._waveform.set_state("idle")
+        self.show_overlay()
+        self._schedule_auto_hide(duration_ms)
+
     def show_overlay(self) -> None:
         """Display overlay without stealing active window focus."""
         self._cancel_auto_hide()

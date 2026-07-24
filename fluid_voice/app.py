@@ -245,7 +245,7 @@ class FluidVoiceApp(QObject):
             self.sfx_engine.play("startup")
 
         if self.overlay_widget:
-            self.overlay_widget.set_state("idle", "⚡ VeloVoice Ready! Hold Alt+S to dictate")
+            self.overlay_widget.show_toast("⚡ VeloVoice Ready! Hold Alt+S", duration_ms=2500)
 
         return True
 
@@ -253,7 +253,7 @@ class FluidVoiceApp(QObject):
         """Triggered when user types > 5 manual keys to remind them of VeloVoice voice typing."""
         logger.info("[HABIT NUDGE] Showing voice typing reminder toast.")
         if self.overlay_widget:
-            self.overlay_widget.set_state("idle", "💡 Save time! Press Alt+S for voice typing")
+            self.overlay_widget.show_toast("💡 Save time! Press Alt+S for voice typing", duration_ms=2500)
 
     def _setup_sigint_handler(self) -> None:
         try:
