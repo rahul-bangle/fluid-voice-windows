@@ -319,7 +319,7 @@ def test_stt_groq_verbose_json_hallucination_dropping():
     mock_resp2.json.return_value = {
         "text": "Low confidence hallucination",
         "no_speech_prob": 0.10,
-        "avg_logprob": -1.35,
+        "avg_logprob": -2.35,
         "compression_ratio": 1.1,
     }
 

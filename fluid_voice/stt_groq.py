@@ -234,7 +234,7 @@ class GroqSTTClient:
                         compression_ratio = max(comp_ratios)
 
                 # Silently drop transcription if hallucination metrics exceed threshold
-                if no_speech_prob > 0.60 or avg_logprob < -1.0 or compression_ratio > 2.4:
+                if no_speech_prob > 0.60 or avg_logprob < -2.0 or compression_ratio > 2.4:
                     logger.info(
                         f"Dropping hallucinated STT transcript: no_speech_prob={no_speech_prob:.2f}, "
                         f"avg_logprob={avg_logprob:.2f}, compression_ratio={compression_ratio:.2f}"
