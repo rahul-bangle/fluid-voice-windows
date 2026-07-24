@@ -308,8 +308,13 @@ class HotkeyListener:
             return keyboard.Key.shift
         if key in (keyboard.Key.cmd_l, keyboard.Key.cmd_r):
             return keyboard.Key.cmd
-        if isinstance(key, keyboard.KeyCode) and key.char:
-            return keyboard.KeyCode.from_char(key.char.lower())
+        if isinstance(key, keyboard.KeyCode):
+            if key.char:
+                return keyboard.KeyCode.from_char(key.char.lower())
+            elif key.vk is not None:
+                # Windows SysKey event (e.g. Alt+S generates vk=83, char=None)
+                if 0x41 <= key.vk <= 0x5A or 0x30 <= key.vk <= 0x39:
+                    return keyboard.KeyCode.from_char(chr(key.vk).lower())
         return key
 
     def _on_pynput_press(self, key) -> None:
