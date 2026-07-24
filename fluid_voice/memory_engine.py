@@ -87,7 +87,40 @@ def diff_tokens(spoken_text: str, corrected_text: str) -> List[Tuple[str, str]]:
         spk = spoken_text.strip().strip(".,!?;:\"'()[]{}")
         cor = corrected_text.strip().strip(".,!?;:\"'()[]{}")
         if spk and cor and spk.lower() != cor.lower():
-            pairs.append((spk, cor))
+            # If user copied a short term (e.g. "Aria") while spoken_text is a long sentence, isolate the best matching candidate word
+            cor_words = cor.split()
+            spk_words = [w.strip(".,!?;:\"'()[]{}") for w in spk.split() if w.strip(".,!?;:\"'()[]{}")]
+            
+            if len(cor_words) < len(spk_words) and spk_words:
+                best_match = None
+                best_score = -1.0
+                win_size = len(cor_words)
+                
+                for idx in range(len(spk_words) - win_size + 1):
+                    sub_spk = " ".join(spk_words[idx : idx + win_size])
+                    sub_spk_clean = "".join(c for c in sub_spk.lower() if c.isalnum())
+                    cor_clean = "".join(c for c in cor.lower() if c.isalnum())
+                    
+                    if not sub_spk_clean or not cor_clean:
+                        continue
+                    
+                    from fluid_voice.post_processor import jaro_winkler_distance, double_metaphone
+                    jw = jaro_winkler_distance(sub_spk_clean, cor_clean)
+                    p1, s1 = double_metaphone(sub_spk_clean)
+                    p2, s2 = double_metaphone(cor_clean)
+                    meta_bonus = 0.2 if (({p1, s1} & {p2, s2}) - {""}) else 0.0
+                    total_score = jw + meta_bonus
+                    
+                    if total_score > best_score and sub_spk_clean != cor_clean:
+                        best_score = total_score
+                        best_match = sub_spk
+                
+                if best_match and best_score >= 0.65:
+                    pairs.append((best_match, cor))
+                else:
+                    pairs.append((spk, cor))
+            else:
+                pairs.append((spk, cor))
 
     return pairs
 

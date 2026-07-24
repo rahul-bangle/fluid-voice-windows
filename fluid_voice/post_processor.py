@@ -513,6 +513,65 @@ def parse_spoken_action(text: str) -> Tuple[str, Optional[str]]:
     return (raw_text, None)
 
 
+JARVIS_ACTIVATION_TRIGGERS = [
+    "jarvis type",
+    "jarvis start",
+    "start typing",
+    "computer type",
+    "type",
+    "typing",
+]
+
+JARVIS_PAUSE_TRIGGERS = [
+    "jarvis pause",
+    "jarvis stop",
+    "stop typing",
+    "computer stop",
+    "jarvis paz",
+    "pause typing",
+    "pause",
+]
+
+
+def parse_jarvis_trigger(text: str, is_active: bool) -> Tuple[str, bool, Optional[str]]:
+    """
+    Parses Jarvis Callout / Standby triggers.
+    - Activation triggers ("Type", "Jarvis type", "Start typing"): Wakes up Jarvis to active listening/typing mode.
+    - Deactivation triggers ("Jarvis pause", "Jarvis stop", "Jarvis paz", "Stop typing"): Puts Jarvis back to standby mode.
+    Returns (cleaned_text, new_is_active_state, status_event_str).
+    """
+    if not text or not text.strip():
+        return ("", is_active, None)
+
+    raw_text = text.strip()
+
+    # Check pause/standby triggers first
+    for p_trig in JARVIS_PAUSE_TRIGGERS:
+        pattern = re.compile(rf"(?:^|[\s,.:;!])({p_trig})(?:[\s,.:;!]|$)", re.IGNORECASE)
+        match = pattern.search(raw_text)
+        if match:
+            cleaned = pattern.sub(" ", raw_text)
+            cleaned = re.sub(r"\s+", " ", cleaned).strip()
+            cleaned = re.sub(r"^[\s,.:;!]+|[\s,.:;!]+$", "", cleaned).strip()
+            return (cleaned, False, "PAUSED")
+
+    # If currently in Standby (is_active is False), check for activation triggers
+    if not is_active:
+        for a_trig in JARVIS_ACTIVATION_TRIGGERS:
+            pattern = re.compile(rf"(?:^|[\s,.:;!])({a_trig})(?:[\s,.:;!]|$)", re.IGNORECASE)
+            match = pattern.search(raw_text)
+            if match:
+                cleaned = pattern.sub(" ", raw_text)
+                cleaned = re.sub(r"\s+", " ", cleaned).strip()
+                cleaned = re.sub(r"^[\s,.:;!]+|[\s,.:;!]+$", "", cleaned).strip()
+                return (cleaned, True, "ACTIVATED")
+        # In standby and no activation trigger spoken -> IGNORE audio (prevents background noise typing)
+        return ("", False, "IGNORED")
+
+    # Already active, no pause trigger found -> continue typing
+    return (raw_text, True, None)
+
+
 class HinglishPostProcessor:
     """Post-processor for Hinglish voice dictation transcription."""
 

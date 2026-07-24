@@ -86,7 +86,11 @@ class FluidVoiceApp(QObject):
             QMetaObject.invokeMethod(self, "toggle_jarvis_mode", Qt.ConnectionType.QueuedConnection)
             return
 
+        if self.hotkey_engine:
+            self.hotkey_engine.toggle_jarvis_mode()
+
         self._is_jarvis_mode = not self._is_jarvis_mode
+        self._jarvis_active = False  # Starts in STANDBY mode to ignore background noise
         mode_name = "Jarvis Hands-Free Mode" if self._is_jarvis_mode else "Push-To-Talk Mode"
         logger.info(f"Toggled mode: {mode_name}")
 
@@ -107,7 +111,7 @@ class FluidVoiceApp(QObject):
 
         if self.overlay_widget:
             if self._is_jarvis_mode:
-                self.overlay_widget.set_state("listening", "Jarvis Mode Active")
+                self.overlay_widget.set_state("listening", "JARVIS STANDBY 🟡 (Say 'Type' to start)")
             else:
                 self.overlay_widget.set_state("idle", "Push-To-Talk Mode")
 
@@ -368,6 +372,29 @@ class FluidVoiceApp(QObject):
             processed_text = self.post_processor.process_with_groq_llm(
                 raw_text, api_key=api_key, context=self._current_context, memory_engine=self.memory_engine
             )
+
+            # Jarvis Callout & Standby Background Noise Filter
+            if self.hotkey_engine and getattr(self.hotkey_engine, "mode", "") == "jarvis":
+                from fluid_voice.post_processor import parse_jarvis_trigger
+                is_active = getattr(self, "_jarvis_active", False)
+                cleaned_j_text, new_active_state, j_status = parse_jarvis_trigger(processed_text, is_active)
+                self._jarvis_active = new_active_state
+
+                if j_status == "ACTIVATED":
+                    if self.overlay_widget:
+                        self.overlay_widget.set_state("recording", "JARVIS ACTIVE 🟢 Dictating...")
+                    print("\n[JARVIS STATUS] 🟢 Callout trigger detected ('Type') -> Activated typing!")
+                elif j_status == "PAUSED":
+                    if self.overlay_widget:
+                        self.overlay_widget.set_state("listening", "JARVIS STANDBY 🟡 Paused")
+                    print("\n[JARVIS STATUS] 🟡 Pause trigger detected ('Jarvis Pause') -> Standby mode!")
+                elif j_status == "IGNORED":
+                    print("[JARVIS STATUS] 🔇 Background noise ignored while in Standby Mode.")
+                    self.set_state(AppState.RECORDING, "Jarvis Standby")
+                    return
+
+                processed_text = cleaned_j_text
+
             cleaned_text, action = parse_spoken_action(processed_text)
             self._last_transcript = cleaned_text or processed_text or ""
             t_llm_done = time.perf_counter()
