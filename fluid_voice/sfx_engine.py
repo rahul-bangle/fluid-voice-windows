@@ -79,6 +79,8 @@ class SFXEngine:
     def _pregenerate_chimes(self) -> None:
         """Pre-generates audio chime WAV files on disk."""
         try:
+            # Startup launch chime: Pleasant 987Hz (B5) 120ms ping
+            self._sound_files["startup"] = self._generate_sine_wav_file("startup", 987, 120, volume=0.35)
             # Start recording chime: Bright 880Hz (A5) 80ms ping
             self._sound_files["start"] = self._generate_sine_wav_file("start", 880, 80, volume=0.35)
             # Stop recording chime: Soft 660Hz (E5) 80ms tone

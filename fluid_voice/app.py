@@ -226,11 +226,34 @@ class FluidVoiceApp(QObject):
         if not self.hotkey_engine.is_running:
             self.hotkey_engine.start()
 
+        # Initialize Habit-Breaking Voice Nudge Engine
+        if not hasattr(self, "habit_nudge") or self.habit_nudge is None:
+            from fluid_voice.habit_nudge import HabitNudgeEngine
+            self.habit_nudge = HabitNudgeEngine(
+                key_threshold=5,
+                on_nudge_trigger=self._on_habit_nudge_triggered,
+            )
+            self.habit_nudge.start()
+
         # Wire Python signal handler for clean CLI termination (Ctrl+C)
         self._setup_sigint_handler()
 
-        self.set_state(AppState.IDLE, "FluidVoice is ready")
+        self.set_state(AppState.IDLE, "VeloVoice is ready")
+
+        # Play startup chime & show launch toast notification
+        if hasattr(self, "sfx_engine") and self.sfx_engine:
+            self.sfx_engine.play("startup")
+
+        if self.overlay_widget:
+            self.overlay_widget.set_state("idle", "⚡ VeloVoice Ready! Hold Alt+S to dictate")
+
         return True
+
+    def _on_habit_nudge_triggered(self) -> None:
+        """Triggered when user types > 5 manual keys to remind them of VeloVoice voice typing."""
+        logger.info("[HABIT NUDGE] Showing voice typing reminder toast.")
+        if self.overlay_widget:
+            self.overlay_widget.set_state("idle", "💡 Save time! Press Alt+S for voice typing")
 
     def _setup_sigint_handler(self) -> None:
         try:
@@ -300,6 +323,9 @@ class FluidVoiceApp(QObject):
             return
 
         logger.info("Start recording requested")
+        if hasattr(self, "habit_nudge") and self.habit_nudge:
+            self.habit_nudge.reset_nudge_state()
+
         if self.paster_engine:
             self._target_hwnd, _ = self.paster_engine.get_active_window()
         else:
