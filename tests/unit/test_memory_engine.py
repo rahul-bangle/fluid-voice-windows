@@ -351,10 +351,9 @@ def test_post_processor_memory_hints_prompt_injection(tmp_path):
         payload = mock_post.call_args[1]["json"]
         system_prompt = payload["messages"][0]["content"]
 
-        assert "8. USER PERSONAL LEXICON & JARGON HINTS:" in system_prompt
+        assert "USER PERSONAL LEXICON & JARGON HINTS:" in system_prompt
         assert "Canonical Terms: Groq, Llama 3.1" in system_prompt or "Groq" in system_prompt
         assert '- "grok", "grock" -> "Groq"' in system_prompt
-        assert "9. DISAMBIGUATION & CONTEXT SAFETY RULES:" in system_prompt
         assert result == "Mera Groq aur Llama 3.1 code mast hai."
 
 

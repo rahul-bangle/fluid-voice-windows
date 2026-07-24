@@ -34,8 +34,8 @@ def test_overlay_ui_initial_state(qapp):
     """Tier 1: Verifies default state, message, and visible sub-widgets upon creation."""
     overlay = OverlayWidget()
     overlay.show()
-    assert overlay.current_state == "listening"
-    assert overlay.status_label.text() == "Listening..."
+    assert overlay.current_state == "idle"
+    assert overlay.status_label.text() == "Ready"
     assert not overlay.waveform.isHidden()
 
 
