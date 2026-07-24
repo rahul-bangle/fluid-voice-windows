@@ -13,7 +13,7 @@ Enforces strict zero-spam rules:
 import time
 import logging
 import threading
-from typing import Callable, Optional
+from typing import Callable, Optional, Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +25,19 @@ except ImportError:
     HAS_PYNPUT = False
 
 
+def _on_pynput_key_press(key: Any) -> None:
+    """Module-level callback compatible with pynput in Python 3.14."""
+    if HabitNudgeEngine._active_instance:
+        HabitNudgeEngine._active_instance._on_key_press(key)
+
+
 class HabitNudgeEngine:
     """
     Monitors physical keyboard presses and triggers a single voice nudge toast
     when > 5 manual keys are typed without voice dictation.
     """
+
+    _active_instance: Optional["HabitNudgeEngine"] = None
 
     def __init__(
         self,
@@ -46,6 +54,7 @@ class HabitNudgeEngine:
         self._nudge_shown = False
         self._listener: Optional[Any] = None
         self._lock = threading.Lock()
+        HabitNudgeEngine._active_instance = self
 
     def start(self) -> bool:
         """Starts background keyboard listener for manual typing detection."""
@@ -57,7 +66,7 @@ class HabitNudgeEngine:
             return True
 
         try:
-            self._listener = keyboard.Listener(on_press=self._handle_key)
+            self._listener = keyboard.Listener(on_press=_on_pynput_key_press)
             self._listener.daemon = True
             self._listener.start()
             logger.info("HabitNudgeEngine started (threshold: >5 keys).")
@@ -84,10 +93,6 @@ class HabitNudgeEngine:
             self._key_count = 0
             self._nudge_shown = False
             logger.debug("[HABIT NUDGE] Nudge state reset after Alt+S voice dictation.")
-
-    def _handle_key(self, key: Any) -> None:
-        """Callback wrapper for pynput keyboard listener."""
-        self._on_key_press(key)
 
     def _on_key_press(self, key: Any) -> None:
         """Internal callback on physical keyboard key press."""
