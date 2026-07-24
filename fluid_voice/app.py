@@ -232,6 +232,7 @@ class FluidVoiceApp(QObject):
             self.habit_nudge = HabitNudgeEngine(
                 key_threshold=5,
                 on_nudge_trigger=self._on_habit_nudge_triggered,
+                is_pasting_check=lambda: self._state != AppState.IDLE,
             )
             self.habit_nudge.start()
 
@@ -249,8 +250,13 @@ class FluidVoiceApp(QObject):
 
         return True
 
+    @pyqtSlot()
     def _on_habit_nudge_triggered(self) -> None:
         """Triggered when user types > 5 manual keys to remind them of VeloVoice voice typing."""
+        if QThread.currentThread() != self.thread():
+            QMetaObject.invokeMethod(self, "_on_habit_nudge_triggered", Qt.ConnectionType.QueuedConnection)
+            return
+
         logger.info("[HABIT NUDGE] Showing voice typing reminder toast.")
         if self.overlay_widget:
             self.overlay_widget.show_toast("💡 Save time! Press Alt+S for voice typing", duration_ms=2500)

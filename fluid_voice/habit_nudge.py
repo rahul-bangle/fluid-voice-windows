@@ -44,10 +44,12 @@ class HabitNudgeEngine:
         key_threshold: int = 5,
         time_window_sec: float = 4.0,
         on_nudge_trigger: Optional[Callable[[], None]] = None,
+        is_pasting_check: Optional[Callable[[], bool]] = None,
     ):
         self.key_threshold = key_threshold
         self.time_window_sec = time_window_sec
         self.on_nudge_trigger = on_nudge_trigger
+        self.is_pasting_check = is_pasting_check
 
         self._key_count = 0
         self._last_key_time = 0.0
@@ -97,6 +99,12 @@ class HabitNudgeEngine:
     def _on_key_press(self, key: Any) -> None:
         """Internal callback on physical keyboard key press."""
         with self._lock:
+            if self.is_pasting_check:
+                try:
+                    if self.is_pasting_check():
+                        return
+                except Exception:
+                    pass
             # Ignore shortcut hotkeys when modifier keys (Alt, Ctrl, Win) are held down
             import sys
             if sys.platform == "win32":

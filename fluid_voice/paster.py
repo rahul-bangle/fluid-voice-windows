@@ -360,19 +360,10 @@ class AutoPaster:
     def get_active_caret_text(self) -> str:
         """
         Phase 2: Queries active window on-screen text snippet via Win32 Caret API.
-        Zero clipboard reliance — eliminates stale clipboard false-positives completely.
+        Zero clipboard reliance — returns empty string if no valid caret selection text.
         """
-        if sys.platform != "win32" or not win32gui:
-            return ""
-        try:
-            current_hwnd, _ = self.get_active_window()
-            if not current_hwnd:
-                return ""
-            length = win32gui.GetWindowTextLength(current_hwnd)
-            if length > 0 and length < 2000:
-                return win32gui.GetWindowText(current_hwnd) or ""
-        except Exception as e:
-            logger.debug(f"Win32 Caret text query skipped: {e}")
+        # GetWindowText returns window title bar text (e.g. "Telegram Web - Brave"), NOT caret text.
+        # Return empty string to prevent window title leakage into memory engine.
         return ""
 
 
