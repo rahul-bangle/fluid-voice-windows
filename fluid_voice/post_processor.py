@@ -776,16 +776,35 @@ class HinglishPostProcessor:
         "thank you for watching",
     )
 
+    def clean_hallucinations(self, text: str) -> str:
+        """Strips Whisper ASR tail hallucinations while preserving legitimate user dictation."""
+        if not text or not text.strip():
+            return ""
+
+        clean = text.strip()
+        lower_clean = clean.lower()
+
+        # If the entire text is just a hallucination phrase, return ""
+        for h in self.WHISPER_HALLUCINATIONS:
+            if lower_clean.strip(".,!?;:\"' ") == h or lower_clean == h:
+                return ""
+
+        # Strip hallucination phrases embedded or appended at the end
+        for h in self.WHISPER_HALLUCINATIONS:
+            pattern = re.compile(rf"(?:[\s,.:;!]|\b){re.escape(h)}(?:[\s,.:;!]|$)", re.IGNORECASE)
+            clean = pattern.sub(" ", clean)
+
+        clean = re.sub(r"\s+", " ", clean).strip()
+        return clean
+
     def process(self, raw_text: str) -> str:
         """Transform raw Whisper STT output into formatted, clean text."""
         if not raw_text or not raw_text.strip():
             return ""
 
-        lower_raw = raw_text.lower()
-        if any(h in lower_raw for h in self.WHISPER_HALLUCINATIONS):
+        text = self.clean_hallucinations(raw_text)
+        if not text:
             return ""
-
-        text = raw_text
 
         # Pass 1: Whitespace & Disfluency Normalization
         if self.config.get("enable_disfluency_cleanup", True):

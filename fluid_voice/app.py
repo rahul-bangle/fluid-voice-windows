@@ -399,23 +399,33 @@ class FluidVoiceApp(QObject):
                 raw_text = cleaned_j_text
                 raw_lower = (raw_text or "").strip().lower()
 
-            # Fast Pre-Filter 2: Whisper Hallucination & Silence Guard (Bypasses LLM)
-            if not raw_text or not raw_text.strip() or any(h in raw_lower for h in HinglishPostProcessor.WHISPER_HALLUCINATIONS):
+            # Fast Pre-Filter 2: Whisper Hallucination & Silence Guard (Strips tail hallucinations)
+            cleaned_raw = self.post_processor.clean_hallucinations(raw_text) if self.post_processor else raw_text
+            if not cleaned_raw or not cleaned_raw.strip():
                 print("[STAGE 2 LLM] ⏭️ Skipping Stage 2 LLM for empty/hallucinated transcript.")
                 self.set_state(AppState.IDLE, "FluidVoice is ready")
                 return
 
+            raw_text = cleaned_raw
+            raw_lower = raw_text.lower()
+
             api_key = self.config_manager.get_api_key() or os.getenv("GROQ_API_KEY", "").strip()
             t_llm_start = time.perf_counter()
-            print("[STAGE 2 LLM] ⚡ Cleaning & formatting via Groq Llama-3.1-8B Instant...")
 
-            try:
-                processed_text = self.post_processor.process_with_groq_llm(
-                    raw_text, api_key=api_key, context=self._current_context, memory_engine=self.memory_engine
-                )
-            except Exception as llm_err:
-                logger.warning(f"Stage 2 LLM unavailable ({llm_err}). Falling back to fast deterministic rule engine.")
+            # Fast Low-Latency Mode Check
+            use_fast_local = getattr(self.config_manager.data, "use_fast_local_engine", False)
+            if use_fast_local:
+                print("[STAGE 2 LOCAL] ⚡ Ultra-fast sub-millisecond local rule engine active (<500ms mode)...")
                 processed_text = self.post_processor.process(raw_text)
+            else:
+                print("[STAGE 2 LLM] ⚡ Cleaning & formatting via Groq Llama-3.1-8B Instant...")
+                try:
+                    processed_text = self.post_processor.process_with_groq_llm(
+                        raw_text, api_key=api_key, context=self._current_context, memory_engine=self.memory_engine
+                    )
+                except Exception as llm_err:
+                    logger.warning(f"Stage 2 LLM unavailable ({llm_err}). Falling back to fast deterministic rule engine.")
+                    processed_text = self.post_processor.process(raw_text)
 
             cleaned_text, action = parse_spoken_action(processed_text)
             self._last_transcript = cleaned_text or processed_text or ""
