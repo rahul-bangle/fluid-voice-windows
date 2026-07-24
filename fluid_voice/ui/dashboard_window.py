@@ -39,6 +39,7 @@ class VeloVoiceDashboardWindow(QMainWindow):
         self.setWindowTitle("Velo AI - Desktop Dashboard")
         self.resize(1280, 800)
         self.setMinimumSize(1024, 680)
+        self.setStyleSheet("background-color: #F7F9FB;")
 
         self._init_ui()
 
