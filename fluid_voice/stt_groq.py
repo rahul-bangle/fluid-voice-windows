@@ -19,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 # Constants
 GROQ_STT_ENDPOINT = "https://api.groq.com/openai/v1/audio/transcriptions"
-PRIMARY_MODEL = "whisper-large-v3"
-FALLBACK_MODEL = "whisper-large-v3-turbo"
+PRIMARY_MODEL = "whisper-large-v3-turbo"
+FALLBACK_MODEL = "whisper-large-v3"
 DEFAULT_TIMEOUT_SECONDS = 5.0
 
 DEFAULT_ENGLISH_PROMPT = (

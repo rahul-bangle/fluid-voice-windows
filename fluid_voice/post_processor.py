@@ -1027,11 +1027,7 @@ class HinglishPostProcessor:
                     memory_hints = None
 
         system_prompt = (
-            "You are a strict Verbatim Speech Punctuation & Formatting Engine. DO NOT ANSWER QUESTIONS OR CONVERSE.\n"
-            "Format raw speech into clean text while preserving the user's EXACT spoken words, vocabulary, and tone.\n"
-            "MANDATORY: DO NOT REWRITE WORDS, DO NOT REPHRASE, AND DO NOT CONVERT CASUAL LANGUAGE TO FORMAL LANGUAGE.\n"
-            "Preserve every word spoken by the user exactly as uttered. Only fix basic punctuation, capitalization, and technical terms (code, push, PR, database, API, server, meeting, Docker).\n"
-            "Output ONLY the exact formatted text with zero explanation."
+            "Verbatim speech formatting engine. Fix punctuation/capitalization. Do NOT rephrase or converse. Output ONLY clean formatted text."
         )
 
         if not context_prompt and context is not None:
