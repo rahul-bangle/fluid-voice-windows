@@ -379,20 +379,27 @@ class FluidVoiceApp(QObject):
             return
 
         try:
-            if self.stt_client is None:
-                api_key = self.config_manager.get_api_key()
-                if not api_key:
-                    raise InvalidAPIKeyError("No Groq API Key configured. Please set your API key in Settings.")
-                self.stt_client = GroqSTTClient(
-                    api_key=api_key,
-                    prompt=self.config_manager.data.hinglish_prompt,
-                    language=getattr(self.config_manager.data, "language", "en"),
-                )
-
             sample_rate = self.audio_recorder._sample_rate if self.audio_recorder else 16000
             t_stt_start = time.perf_counter()
-            print(f"[STAGE 1 STT] 📡 Transcribing {len(audio_bytes)} bytes audio via Groq Whisper-v3...")
-            raw_text = self.stt_client.transcribe(audio_bytes, sample_rate=sample_rate)
+
+            raw_text = None
+            if self.stt_client is not None:
+                try:
+                    print(f"[STAGE 1 STT] 📡 Transcribing {len(audio_bytes)} bytes audio via Groq Whisper-v3...")
+                    raw_text = self.stt_client.transcribe(audio_bytes, sample_rate=sample_rate)
+                except Exception as cloud_err:
+                    logger.warning(f"[CIRCUIT BREAKER TRIGGERED] Groq STT cloud request failed ({cloud_err}). Failing over to Local STT...")
+
+            if not raw_text:
+                from fluid_voice.stt_local import LocalWhisperSTTClient
+                if not hasattr(self, "local_stt_client") or self.local_stt_client is None:
+                    self.local_stt_client = LocalWhisperSTTClient()
+                print(f"[STAGE 1 LOCAL STT] ⚡ Transcribing via Local Offline STT Fallback...")
+                raw_text = self.local_stt_client.transcribe_audio_bytes(
+                    audio_bytes,
+                    prompt=self.config_manager.data.hinglish_prompt if self.config_manager else None,
+                )
+
             self._last_raw_transcript = raw_text or ""
 
             t_stt_done = time.perf_counter()

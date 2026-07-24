@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 GROQ_STT_ENDPOINT = "https://api.groq.com/openai/v1/audio/transcriptions"
 PRIMARY_MODEL = "whisper-large-v3-turbo"
 FALLBACK_MODEL = "whisper-large-v3"
-DEFAULT_TIMEOUT_SECONDS = 5.0
+DEFAULT_TIMEOUT_SECONDS = 1.5
 
 DEFAULT_ENGLISH_PROMPT = (
     "Hi Rahul, how may I help you today? Please deploy the latest Docker container to Kubernetes "
