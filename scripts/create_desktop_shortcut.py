@@ -10,22 +10,29 @@ from pathlib import Path
 
 
 def create_shortcut():
-    desktop_dir = Path(os.path.expanduser("~/Desktop"))
+    user_home = Path(os.path.expanduser("~"))
+    desktop_dirs = [user_home / "OneDrive" / "Desktop", user_home / "Desktop"]
     project_dir = Path(__file__).resolve().parent.parent
     vbs_path = project_dir / "VeloVoice.vbs"
-    shortcut_path = desktop_dir / "VeloVoice.lnk"
 
-    try:
-        import win32com.client
-        shell = win32com.client.Dispatch("WScript.Shell")
-        shortcut = shell.CreateShortCut(str(shortcut_path))
-        shortcut.TargetPath = "wscript.exe"
-        shortcut.Arguments = f'"{vbs_path}"'
-        shortcut.WorkingDirectory = str(project_dir)
-        shortcut.Description = "VeloVoice - Low Latency Voice OS"
-        shortcut.Save()
-        print(f"✅ Created Desktop Shortcut: {shortcut_path}")
-        return True
+    created = False
+    for d in desktop_dirs:
+        if d.exists():
+            shortcut_path = d / "VeloVoice.lnk"
+            try:
+                import win32com.client
+                shell = win32com.client.Dispatch("WScript.Shell")
+                shortcut = shell.CreateShortCut(str(shortcut_path))
+                shortcut.TargetPath = "wscript.exe"
+                shortcut.Arguments = f'"{vbs_path}"'
+                shortcut.WorkingDirectory = str(project_dir)
+                shortcut.Description = "VeloVoice - Low Latency Voice OS"
+                shortcut.Save()
+                print(f"✅ Created Desktop Shortcut: {shortcut_path}")
+                created = True
+            except Exception as e:
+                print(f"Failed to create shortcut at {shortcut_path}: {e}")
+    return created
     except Exception as e:
         print(f"Failed to create shortcut via win32com: {e}")
         # Fallback via PowerShell
