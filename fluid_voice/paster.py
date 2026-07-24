@@ -202,31 +202,31 @@ class AutoPaster:
             return False
         try:
             import ctypes
-            from ctypes import wintype
+            from ctypes import wintypes
 
             class KEYBDINPUT(ctypes.Structure):
                 _fields_ = [
-                    ("wVk", wintype.WORD),
-                    ("wScan", wintype.WORD),
-                    ("dwFlags", wintype.DWORD),
-                    ("time", wintype.DWORD),
+                    ("wVk", wintypes.WORD),
+                    ("wScan", wintypes.WORD),
+                    ("dwFlags", wintypes.DWORD),
+                    ("time", wintypes.DWORD),
                     ("dwExtraInfo", ctypes.c_ulonglong if sys.maxsize > 2**31 - 1 else ctypes.c_ulong),
                 ]
 
             class HARDWAREINPUT(ctypes.Structure):
                 _fields_ = [
-                    ("uMsg", wintype.DWORD),
-                    ("wParamL", wintype.WORD),
-                    ("wParamH", wintype.WORD),
+                    ("uMsg", wintypes.DWORD),
+                    ("wParamL", wintypes.WORD),
+                    ("wParamH", wintypes.WORD),
                 ]
 
             class MOUSEINPUT(ctypes.Structure):
                 _fields_ = [
-                    ("dx", wintype.LONG),
-                    ("dy", wintype.LONG),
-                    ("mouseData", wintype.DWORD),
-                    ("dwFlags", wintype.DWORD),
-                    ("time", wintype.DWORD),
+                    ("dx", wintypes.LONG),
+                    ("dy", wintypes.LONG),
+                    ("mouseData", wintypes.DWORD),
+                    ("dwFlags", wintypes.DWORD),
+                    ("time", wintypes.DWORD),
                     ("dwExtraInfo", ctypes.c_ulonglong if sys.maxsize > 2**31 - 1 else ctypes.c_ulong),
                 ]
 
@@ -239,7 +239,7 @@ class AutoPaster:
 
             class INPUT(ctypes.Structure):
                 _fields_ = [
-                    ("type", wintype.DWORD),
+                    ("type", wintypes.DWORD),
                     ("union", INPUT_UNION),
                 ]
 
