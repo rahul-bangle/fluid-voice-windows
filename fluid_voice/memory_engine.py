@@ -72,14 +72,32 @@ def diff_tokens(spoken_text: str, corrected_text: str) -> List[Tuple[str, str]]:
             spk = " ".join(spoken_words[i1:i2]).strip(".,!?;:\"'()[]{}")
             cor = " ".join(corrected_words[j1:j2]).strip(".,!?;:\"'()[]{}")
             if spk and cor and spk.lower() != cor.lower():
-                pairs.append((spk, cor))
+                from fluid_voice.post_processor import jaro_winkler_distance, double_metaphone
+                p1, s1 = double_metaphone(spk)
+                p2, s2 = double_metaphone(cor)
+                jw = jaro_winkler_distance(spk.lower(), cor.lower())
+                meta_bonus = 0.2 if (({p1, s1} & {p2, s2}) - {""}) else 0.0
+                total_score = jw + meta_bonus
+                if total_score >= 0.60:
+                    pairs.append((spk, cor))
+                else:
+                    logger.info(f"[PHONETIC GUARD] Intent rewrite detected ('{spk}' -> '{cor}', score={total_score:.2f} < 0.60). Skipping memory save.")
         elif tag == "delete" and i + 1 < len(opcodes) and opcodes[i + 1][0] == "insert":
             _, ni1, ni2, _, _ = opcodes[i]
             _, _, _, nj1, nj2 = opcodes[i + 1]
             spk = " ".join(spoken_words[ni1:ni2]).strip(".,!?;:\"'()[]{}")
             cor = " ".join(corrected_words[nj1:nj2]).strip(".,!?;:\"'()[]{}")
             if spk and cor and spk.lower() != cor.lower():
-                pairs.append((spk, cor))
+                from fluid_voice.post_processor import jaro_winkler_distance, double_metaphone
+                p1, s1 = double_metaphone(spk)
+                p2, s2 = double_metaphone(cor)
+                jw = jaro_winkler_distance(spk.lower(), cor.lower())
+                meta_bonus = 0.2 if (({p1, s1} & {p2, s2}) - {""}) else 0.0
+                total_score = jw + meta_bonus
+                if total_score >= 0.60:
+                    pairs.append((spk, cor))
+                else:
+                    logger.info(f"[PHONETIC GUARD] Intent rewrite detected ('{spk}' -> '{cor}', score={total_score:.2f} < 0.60). Skipping memory save.")
             i += 1
         i += 1
 
