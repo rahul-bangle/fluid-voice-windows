@@ -181,6 +181,18 @@ class VeloVoiceDashboardWindow(QMainWindow):
             self.custom_page = VeloWebEnginePage(self, self.web_view)
             self.web_view.setPage(self.custom_page)
 
+            # Enable QWebChannel IPC bridge
+            try:
+                from PyQt6.QtWebChannel import QWebChannel
+                from fluid_voice.ui.web_bridge import VeloVoiceWebBridge
+                self.web_bridge = VeloVoiceWebBridge(app_controller=self.app)
+                self.web_channel = QWebChannel(self.web_view.page())
+                self.web_channel.registerObject("pyqtBridge", self.web_bridge)
+                self.web_view.page().setWebChannel(self.web_channel)
+                logger.info("QWebChannel pyqtBridge registered successfully on dashboard page.")
+            except Exception as e:
+                logger.warning(f"Could not setup QWebChannel: {e}")
+
             # Enable local content access, cross-origin resources, and smooth rendering
             settings = self.web_view.page().settings()
             settings.setAttribute(
@@ -212,9 +224,29 @@ class VeloVoiceDashboardWindow(QMainWindow):
             self.setCentralWidget(fallback)
 
     def _on_page_loaded(self, success: bool) -> None:
-        """Injects universal click navigation listener into loaded HTML screen."""
+        """Injects universal click navigation listener and QWebChannel JS bridge on page load."""
         if success and HAS_WEBENGINE and hasattr(self, "web_view"):
             self.web_view.page().runJavaScript(UNIVERSAL_NAV_SCRIPT)
+            qwebchannel_js = """
+            if (typeof qt !== 'undefined' && qt.webChannelTransport) {
+                new QWebChannel(qt.webChannelTransport, function(channel) {
+                    window.pyqtBridge = channel.objects.pyqtBridge;
+                    if (typeof renderHistoryFeed === 'function') {
+                        try {
+                            var items = JSON.parse(window.pyqtBridge.getHistory());
+                            renderHistoryFeed(items);
+                        } catch(e) { console.error('History render error:', e); }
+                    }
+                    if (typeof renderAnalytics === 'function') {
+                        try {
+                            var summary = JSON.parse(window.pyqtBridge.getAnalyticsSummary());
+                            renderAnalytics(summary);
+                        } catch(e) { console.error('Analytics render error:', e); }
+                    }
+                });
+            }
+            """
+            self.web_view.page().runJavaScript(qwebchannel_js)
 
     def _resolve_stitch_url(self, url_str: str) -> Optional[Path]:
         """Resolves relative HTML links inside Stitch mockups to absolute Path objects."""

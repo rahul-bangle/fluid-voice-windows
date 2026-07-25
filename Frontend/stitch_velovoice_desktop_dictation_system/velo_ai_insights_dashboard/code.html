@@ -370,8 +370,27 @@
 </div>
 <!-- END: Secondary Sections -->
 </div>
-<!-- END: Content Wrapper -->
-</main>
 <!-- END: Main Content Area -->
 </div>
+<script>
+  function renderAnalytics(data) {
+    if (!data) return;
+    if (data.avg_stt_ms !== undefined) {
+      var sttEl = document.getElementById("stt-latency-val");
+      if (sttEl) sttEl.innerText = data.avg_stt_ms + " ms";
+    }
+    if (data.avg_llm_ms !== undefined) {
+      var llmEl = document.getElementById("llm-latency-val");
+      if (llmEl) llmEl.innerText = data.avg_llm_ms + " ms";
+    }
+    if (data.avg_paste_ms !== undefined) {
+      var pasteEl = document.getElementById("paste-latency-val");
+      if (pasteEl) pasteEl.innerText = data.avg_paste_ms + " ms";
+    }
+    if (data.avg_total_ms !== undefined) {
+      var totalEl = document.getElementById("total-latency-val");
+      if (totalEl) totalEl.innerText = data.avg_total_ms + " ms";
+    }
+  }
+</script>
 </body></html>
