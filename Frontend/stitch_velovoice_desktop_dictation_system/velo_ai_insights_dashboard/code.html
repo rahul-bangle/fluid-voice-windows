@@ -206,6 +206,34 @@
 </div>
 </div>
 <!-- END: Top Stats Grid -->
+
+<!-- BEGIN: Sub-200ms Latency Breakdown Card -->
+<div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm mb-8">
+  <div class="flex justify-between items-center mb-4">
+    <h3 class="text-sm font-bold text-slate-900 uppercase tracking-wider">🚀 Sub-200ms Pipeline Latency Breakdown</h3>
+    <span class="text-xs font-bold bg-green-50 text-green-700 px-3 py-1 rounded-full border border-green-200">⚡ Sub-200ms Streak Active</span>
+  </div>
+  <div class="grid grid-cols-4 gap-4 text-center">
+    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">🎙️ STT Latency</p>
+      <p id="stt-latency-val" class="text-2xl font-bold text-slate-900 mt-1">110.0 ms</p>
+    </div>
+    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">🧠 LLM Latency</p>
+      <p id="llm-latency-val" class="text-2xl font-bold text-slate-900 mt-1">45.0 ms</p>
+    </div>
+    <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">⚡ Paste Latency</p>
+      <p id="paste-latency-val" class="text-2xl font-bold text-slate-900 mt-1">12.0 ms</p>
+    </div>
+    <div class="bg-blue-50 p-4 rounded-xl border border-blue-100">
+      <p class="text-[10px] font-bold text-blue-700 uppercase tracking-wider">🎯 Total Pipeline</p>
+      <p id="total-latency-val" class="text-2xl font-bold text-blue-900 mt-1">167.0 ms</p>
+    </div>
+  </div>
+</div>
+<!-- END: Sub-200ms Latency Breakdown Card -->
+
 <!-- BEGIN: Secondary Sections -->
 <div class="grid grid-cols-2 gap-6">
 <!-- Desktop Usage Breakdown -->
