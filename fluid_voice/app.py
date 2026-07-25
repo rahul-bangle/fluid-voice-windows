@@ -408,12 +408,15 @@ class FluidVoiceApp(QObject):
     def _process_dictation_pipeline(self, audio_bytes: bytes) -> None:
         """Executes the STT transcription and post-processing pipeline with rate-limit and latency guards."""
         t_pipeline_start = time.perf_counter()
-        if not audio_bytes or len(audio_bytes) < 8000:
-            logger.debug("Audio chunk too short (<0.25s). Skipping pipeline.")
-            if self.hotkey_engine and getattr(self.hotkey_engine, "mode", "") == "jarvis":
-                self.set_state(AppState.RECORDING, "Jarvis Standby")
-            else:
-                self.set_state(AppState.IDLE, "FluidVoice is ready")
+        
+        # Audio Duration Guard: 16kHz 16-bit mono WAV = 32,000 bytes/sec.
+        # Header is ~44 bytes. 0.35s = ~11,200 bytes audio data (Total < 11,244 bytes).
+        # Accidental tap (<350ms duration) is dropped immediately to prevent STT hallucinations!
+        if not audio_bytes or len(audio_bytes) < 11244:
+            logger.info(f"[AUDIO GATE] Accidental key tap or short audio detected ({len(audio_bytes)} bytes < 0.35s). Skipping STT to prevent hallucinations.")
+            if self.overlay_widget:
+                self.overlay_widget.hide()
+            self.set_state(AppState.IDLE, "FluidVoice is ready")
             return
 
         try:
