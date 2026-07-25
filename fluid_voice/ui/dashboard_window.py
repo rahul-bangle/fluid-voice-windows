@@ -23,7 +23,8 @@ try:
     from PyQt6.QtWebEngineWidgets import QWebEngineView
     from PyQt6.QtWebEngineCore import QWebEngineSettings, QWebEnginePage
     HAS_WEBENGINE = True
-except ImportError:
+except Exception as err:
+    logger.warning(f"QWebEngineWidgets import exception: {err}")
     HAS_WEBENGINE = False
     QWebEngineView = None
     QWebEnginePage = None

@@ -2,6 +2,16 @@ import sys
 import logging
 from datetime import datetime
 from pathlib import Path
+
+# Sanitize sys.path to prevent Python 3.14 from picking up Python 3.13 venv C-extensions
+sys.path = [p for p in sys.path if "venv" not in p]
+
+# QtWebEngineWidgets MUST be imported (or Qt.AA_ShareOpenGLContexts set) BEFORE QApplication is instantiated!
+try:
+    from PyQt6.QtWebEngineWidgets import QWebEngineView
+except Exception:
+    pass
+
 from fluid_voice.config import get_app_data_dir
 from fluid_voice.app import FluidVoiceApp
 
