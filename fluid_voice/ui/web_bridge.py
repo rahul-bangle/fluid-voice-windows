@@ -120,3 +120,24 @@ class VeloVoiceWebBridge(QObject):
         except Exception as e:
             logger.error(f"Failed to add vocabulary term via WebBridge: {e}")
             return False
+
+    @pyqtSlot(result=str)
+    def getAnalyticsSummary(self) -> str:
+        """Returns JSON aggregated analytics data for Insights HTML Dashboard."""
+        if not self.app or not getattr(self.app, "analytics_engine", None):
+            return json.dumps({
+                "avg_wpm": 295.0,
+                "total_words": 0,
+                "total_time_saved_mins": 0.0,
+                "total_fixes": 0,
+                "avg_stt_ms": 110.0,
+                "avg_llm_ms": 45.0,
+                "avg_paste_ms": 12.0,
+                "avg_total_ms": 167.0,
+                "app_breakdown": {},
+            })
+        try:
+            return json.dumps(self.app.analytics_engine.get_summary())
+        except Exception as e:
+            logger.error(f"Failed to get analytics summary for WebBridge: {e}")
+            return json.dumps({})

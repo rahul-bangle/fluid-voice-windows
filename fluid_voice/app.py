@@ -177,6 +177,11 @@ class FluidVoiceApp(QObject):
         if self.memory_engine is None:
             self.memory_engine = MemoryEngine(filepath=self.config_manager.config_dir / "user_memory.json")
 
+        # Initialize Analytics Engine
+        if not hasattr(self, "analytics_engine") or self.analytics_engine is None:
+            from fluid_voice.analytics_engine import AnalyticsEngine
+            self.analytics_engine = AnalyticsEngine()
+
         # Initialize SFX Engine
         if not hasattr(self, "sfx_engine") or self.sfx_engine is None:
             self.sfx_engine = SFXEngine(enabled=getattr(self.config_manager.data, "sfx_enabled", True))
@@ -528,6 +533,21 @@ class FluidVoiceApp(QObject):
                 print(f"  • TOTAL KEY RELEASE -> AUTO-PASTE                         : {total_processing_ms:.1f} ms")
                 print("=========================================================================\n")
 
+                if hasattr(self, "analytics_engine") and self.analytics_engine:
+                    try:
+                        self.analytics_engine.log_dictation(
+                            spoken_text=raw_text or "",
+                            final_text=cleaned_text or "",
+                            audio_duration_s=getattr(self, "_last_audio_duration", 1.5),
+                            stt_latency_ms=stt_latency_ms,
+                            llm_latency_ms=llm_latency_ms,
+                            paste_latency_ms=paste_latency_ms,
+                            app_name=getattr(self, "_current_context", "Desktop"),
+                            ai_fixes_count=1 if raw_text and cleaned_text and raw_text.strip() != cleaned_text.strip() else 0,
+                        )
+                    except Exception as e:
+                        logger.debug(f"Analytics logging failed: {e}")
+
                 if hasattr(self, "sfx_engine") and self.sfx_engine:
                     self.sfx_engine.play("paste")
 
@@ -638,13 +658,13 @@ class FluidVoiceApp(QObject):
             self.overlay_widget.set_state("error", f"Error: {err_msg}")
 
     def open_dashboard(self) -> None:
-        """Opens/restores single-instance VeloVoice Dashboard window."""
+        """Opens/restores single-instance VeloVoice Dashboard window maximized."""
         logger.info("Open VeloVoice Dashboard requested")
         if not hasattr(self, "_dashboard_window") or self._dashboard_window is None:
             from fluid_voice.ui.dashboard_window import VeloVoiceDashboardWindow
             self._dashboard_window = VeloVoiceDashboardWindow(app_controller=self)
-        
-        self._dashboard_window.show()
+
+        self._dashboard_window.showMaximized()
         self._dashboard_window.raise_()
         self._dashboard_window.activateWindow()
 
