@@ -158,49 +158,13 @@
 <!-- Activity Feed -->
 <section data-purpose="recent-activity">
 <div class="flex items-center justify-between mb-4">
-<h3 class="text-xs font-bold text-brand-muted uppercase tracking-widest">MAY 7, 2026</h3>
+<h3 class="text-xs font-bold text-brand-muted uppercase tracking-widest">RECENT DICTATIONS</h3>
 <button class="text-brand-muted hover:text-brand-primary">
 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
 </button>
 </div>
-<div class="bg-white rounded-2xl border border-brand-border divide-y divide-brand-border shadow-sm overflow-hidden">
-<!-- Activity Item 1 -->
-<div class="p-6 flex items-start space-x-6 hover:bg-gray-50 transition-colors group">
-<span class="text-xs font-medium text-brand-muted whitespace-nowrap mt-1">3:44 am</span>
-<div class="flex-1">
-<p class="text-brand-text leading-relaxed">Great, let's connect. Are you available on Friday for a quick sync regarding the architecture review?</p>
-</div>
-<div class="flex items-center space-x-3 opacity-0 group-hover:opacity-100 transition-opacity">
-<button class="p-1.5 text-brand-muted hover:text-brand-primary hover:bg-white rounded-lg border border-transparent hover:border-brand-border shadow-sm" title="Copy to clipboard">
-<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
-</button>
-<button class="p-1.5 text-brand-muted hover:text-red-500 hover:bg-white rounded-lg border border-transparent hover:border-brand-border shadow-sm" title="Flag session">
-<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-1 6 1 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
-</button>
-<button class="p-1.5 text-brand-muted hover:text-brand-text" title="More options">
-<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
-</button>
-</div>
-</div>
-<!-- Activity Item 2 -->
-<div class="p-6 flex items-start space-x-6 hover:bg-gray-50 transition-colors group">
-<span class="text-xs font-medium text-brand-muted whitespace-nowrap mt-1">3:43 am</span>
-<div class="flex-1">
-<p class="text-brand-text leading-relaxed italic text-brand-muted">Silence detected (12s)</p>
-</div>
-</div>
-<!-- Activity Item 3 -->
-<div class="p-6 flex items-start space-x-6 hover:bg-gray-50 transition-colors group">
-<span class="text-xs font-medium text-brand-muted whitespace-nowrap mt-1">3:43 am</span>
-<div class="flex-1">
-<p class="text-brand-text leading-relaxed">Thank you very much. I'll send over the updated documentation by end of day today.</p>
-</div>
-<div class="flex items-center space-x-3 opacity-0 group-hover:opacity-100 transition-opacity">
-<button class="p-1.5 text-brand-muted hover:text-brand-primary" title="Copy to clipboard">
-<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
-</button>
-</div>
-</div>
+<div class="bg-white rounded-2xl border border-brand-border p-8 text-center text-brand-muted shadow-sm">
+  <p class="text-sm font-medium">Loading recent dictations...</p>
 </div>
 </section>
 </div>
@@ -260,7 +224,19 @@
 
   function renderHistoryFeed(items) {
     var feedSection = document.querySelector('[data-purpose="recent-activity"]');
-    if (!feedSection || !items || items.length === 0) return;
+    if (!feedSection) return;
+    
+    if (!items || items.length === 0) {
+      var emptyHtml = '<div class="flex items-center justify-between mb-4">';
+      emptyHtml += '<h3 class="text-xs font-bold text-brand-muted uppercase tracking-widest">RECENT DICTATIONS</h3>';
+      emptyHtml += '</div>';
+      emptyHtml += '<div class="bg-white rounded-2xl border border-brand-border p-8 text-center text-brand-muted shadow-sm">';
+      emptyHtml += '  <p class="text-sm font-medium">No dictations recorded yet today.</p>';
+      emptyHtml += '  <p class="text-xs mt-1">Press <span class="bg-gray-100 px-2 py-0.5 rounded font-mono text-slate-700">Ctrl+Shift</span> anywhere to start dictating!</p>';
+      emptyHtml += '</div>';
+      feedSection.innerHTML = emptyHtml;
+      return;
+    }
     
     var html = '<div class="flex items-center justify-between mb-4">';
     html += '<h3 class="text-xs font-bold text-brand-muted uppercase tracking-widest">RECENT DICTATIONS</h3>';

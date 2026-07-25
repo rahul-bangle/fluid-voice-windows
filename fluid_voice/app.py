@@ -546,7 +546,15 @@ class FluidVoiceApp(QObject):
                             ai_fixes_count=1 if raw_text and cleaned_text and raw_text.strip() != cleaned_text.strip() else 0,
                         )
                     except Exception as e:
-                        logger.debug(f"Analytics logging failed: {e}")
+                        logger.warning(f"Analytics logging failed: {e}")
+
+                # Notify Dashboard UI WebBridge if active
+                if hasattr(self, "dashboard_window") and self.dashboard_window and hasattr(self.dashboard_window, "web_bridge"):
+                    try:
+                        recent_hist = self.analytics_engine.get_recent_history(limit=50)
+                        self.dashboard_window.web_bridge.history_updated.emit(json.dumps(recent_hist))
+                    except Exception as e:
+                        logger.debug(f"Failed to push live history update to WebBridge: {e}")
 
                 if hasattr(self, "sfx_engine") and self.sfx_engine:
                     self.sfx_engine.play("paste")

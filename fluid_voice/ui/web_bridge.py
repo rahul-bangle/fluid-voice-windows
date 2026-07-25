@@ -36,12 +36,11 @@ class VeloVoiceWebBridge(QObject):
 
     @pyqtSlot(result=str)
     def getHistory(self) -> str:
-        """Returns JSON list of past dictation history items."""
-        if not self.app:
+        """Returns JSON list of past dictation history items from SQLite DB."""
+        if not self.app or not getattr(self.app, "analytics_engine", None):
             return json.dumps([])
         try:
-            # Gather dictation history from app if available
-            history = getattr(self.app, "_history_items", [])
+            history = self.app.analytics_engine.get_recent_history(limit=50)
             return json.dumps(history)
         except Exception as e:
             logger.error(f"Failed to get history for WebBridge: {e}")

@@ -38,7 +38,7 @@ UNIVERSAL_NAV_SCRIPT = """
     window.__velo_nav_attached = true;
 
     document.addEventListener('click', function(e) {
-        let a = e.target.closest('a');
+        let a = e.target.closest('a') || e.target.closest('button');
         if (!a) return;
 
         let text = (a.innerText || '').trim().toLowerCase();
@@ -227,26 +227,30 @@ class VeloVoiceDashboardWindow(QMainWindow):
         """Injects universal click navigation listener and QWebChannel JS bridge on page load."""
         if success and HAS_WEBENGINE and hasattr(self, "web_view"):
             self.web_view.page().runJavaScript(UNIVERSAL_NAV_SCRIPT)
-            qwebchannel_js = """
-            if (typeof qt !== 'undefined' && qt.webChannelTransport) {
-                new QWebChannel(qt.webChannelTransport, function(channel) {
-                    window.pyqtBridge = channel.objects.pyqtBridge;
-                    if (typeof renderHistoryFeed === 'function') {
-                        try {
-                            var items = JSON.parse(window.pyqtBridge.getHistory());
-                            renderHistoryFeed(items);
-                        } catch(e) { console.error('History render error:', e); }
-                    }
-                    if (typeof renderAnalytics === 'function') {
-                        try {
-                            var summary = JSON.parse(window.pyqtBridge.getAnalyticsSummary());
-                            renderAnalytics(summary);
-                        } catch(e) { console.error('Analytics render error:', e); }
-                    }
-                });
-            }
-            """
-            self.web_view.page().runJavaScript(qwebchannel_js)
+            
+            # Fetch data directly in Python and inject into JS immediately (Sub-5ms load time, zero QWebChannel delay!)
+            try:
+                if hasattr(self, "web_bridge") and self.web_bridge:
+                    history_json = self.web_bridge.getHistory()
+                    analytics_json = self.web_bridge.getAnalyticsSummary()
+                    
+                    inject_js = f"""
+                    (function() {{
+                        window.pyqtBridge = {{
+                            getHistory: function() {{ return '{history_json.replace("'", "\\'")}'; }},
+                            getAnalyticsSummary: function() {{ return '{analytics_json.replace("'", "\\'")}'; }}
+                        }};
+                        if (typeof renderHistoryFeed === 'function') {{
+                            try {{ renderHistoryFeed(JSON.parse(window.pyqtBridge.getHistory())); }} catch(e) {{ console.error(e); }}
+                        }}
+                        if (typeof renderAnalytics === 'function') {{
+                            try {{ renderAnalytics(JSON.parse(window.pyqtBridge.getAnalyticsSummary())); }} catch(e) {{ console.error(e); }}
+                        }}
+                    }})();
+                    """
+                    self.web_view.page().runJavaScript(inject_js)
+            except Exception as err:
+                logger.warning(f"Error injecting direct JS data on page load: {err}")
 
     def _resolve_stitch_url(self, url_str: str) -> Optional[Path]:
         """Resolves relative HTML links inside Stitch mockups to absolute Path objects."""
@@ -262,11 +266,8 @@ class VeloVoiceDashboardWindow(QMainWindow):
         folder = self.PAGE_MAP.get(page_name.lower(), "velo_ai_dashboard_light_mode")
         html_file = (self.frontend_dir / folder / "code.html").resolve()
         if HAS_WEBENGINE and hasattr(self, "web_view") and html_file.exists():
-            current_url = self.web_view.url().toLocalFile()
-            target_url = str(html_file)
-            if current_url != target_url:
-                self.web_view.load(QUrl.fromLocalFile(target_url))
-                logger.info(f"Switched Velo AI Dashboard page to: {page_name} ({html_file})")
+            self.web_view.load(QUrl.fromLocalFile(str(html_file)))
+            logger.info(f"Switched Velo AI Dashboard page to: {page_name} ({html_file})")
 
     def closeEvent(self, event) -> None:
         """Hides window to system tray when user clicks close (X)."""

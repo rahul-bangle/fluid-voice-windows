@@ -97,7 +97,7 @@ class SettingsDialog(QDialog):
 
     settings_saved = pyqtSignal(dict)
 
-    HOTKEY_OPTIONS = ["Ctrl+Shift", "Ctrl+Alt", "Win+Space", "F9"]
+    HOTKEY_OPTIONS = ["Alt+S", "Ctrl+Shift", "Ctrl+Alt", "Win+Space", "F9", "Ctrl+Shift+V"]
 
     def __init__(self, config_manager: Optional[ConfigManager] = None, parent: Optional[QWidget] = None):
         super().__init__(parent)

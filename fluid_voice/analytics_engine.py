@@ -50,6 +50,14 @@ class AnalyticsEngine:
                     ai_fixes_count INTEGER NOT NULL
                 );
             """)
+            # Auto-migrate table if missing spoken_text / final_text columns
+            cursor.execute("PRAGMA table_info(dictation_metrics);")
+            columns = [col[1] for col in cursor.fetchall()]
+            if "spoken_text" not in columns:
+                cursor.execute("ALTER TABLE dictation_metrics ADD COLUMN spoken_text TEXT DEFAULT '';")
+            if "final_text" not in columns:
+                cursor.execute("ALTER TABLE dictation_metrics ADD COLUMN final_text TEXT DEFAULT '';")
+
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_date_str ON dictation_metrics(date_str);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_app_name ON dictation_metrics(app_name);")
             conn.commit()
