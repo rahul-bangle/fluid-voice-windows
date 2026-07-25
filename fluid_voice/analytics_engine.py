@@ -35,6 +35,8 @@ class AnalyticsEngine:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                     date_str TEXT NOT NULL,
+                    spoken_text TEXT DEFAULT '',
+                    final_text TEXT DEFAULT '',
                     spoken_word_count INTEGER NOT NULL,
                     final_word_count INTEGER NOT NULL,
                     audio_duration_s REAL NOT NULL,
@@ -79,14 +81,14 @@ class AnalyticsEngine:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO dictation_metrics (
-                    date_str, spoken_word_count, final_word_count, audio_duration_s,
-                    wpm_speed, time_saved_s, stt_latency_ms, llm_latency_ms,
-                    paste_latency_ms, total_latency_ms, app_name, ai_fixes_count
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    date_str, spoken_text, final_text, spoken_word_count, final_word_count,
+                    audio_duration_s, wpm_speed, time_saved_s, stt_latency_ms,
+                    llm_latency_ms, paste_latency_ms, total_latency_ms, app_name, ai_fixes_count
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                date_str, spoken_word_count, final_word_count, audio_duration_s,
-                wpm_speed, time_saved_s, stt_latency_ms, llm_latency_ms,
-                paste_latency_ms, total_latency_ms, app_name, ai_fixes_count
+                date_str, spoken_text, final_text, spoken_word_count, final_word_count,
+                audio_duration_s, wpm_speed, time_saved_s, stt_latency_ms,
+                llm_latency_ms, paste_latency_ms, total_latency_ms, app_name, ai_fixes_count
             ))
             conn.commit()
 
@@ -128,3 +130,32 @@ class AnalyticsEngine:
                 "total_fixes": row[8],
                 "app_breakdown": app_breakdown,
             }
+
+    def get_recent_history(self, limit: int = 50) -> list:
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, timestamp, date_str, spoken_text, final_text, app_name, wpm_speed
+                FROM dictation_metrics
+                ORDER BY id DESC
+                LIMIT ?;
+            """, (limit,))
+            rows = cursor.fetchall()
+            history = []
+            for r in rows:
+                dt_str = str(r[1])
+                try:
+                    time_str = datetime.strptime(dt_str.split(".")[0], "%Y-%m-%d %H:%M:%S").strftime("%I:%M %p")
+                except Exception:
+                    time_str = dt_str
+                history.append({
+                    "id": r[0],
+                    "timestamp": r[1],
+                    "date_str": r[2],
+                    "spoken_text": r[3],
+                    "final_text": r[4],
+                    "app_name": r[5],
+                    "wpm_speed": round(r[6], 1),
+                    "time_str": time_str,
+                })
+            return history
