@@ -247,8 +247,61 @@
 <div class="absolute -bottom-8 -right-8 w-24 h-24 bg-white/10 rounded-full blur-2xl"></div>
 </div>
 </aside>
-<!-- END: Stats Panel -->
-</div>
-</main>
 <!-- END: Main Content Area -->
+<script>
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+  function escapeJs(str) {
+    if (!str) return '';
+    return str.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
+  }
+
+  function renderHistoryFeed(items) {
+    var feedSection = document.querySelector('[data-purpose="recent-activity"]');
+    if (!feedSection || !items || items.length === 0) return;
+    
+    var html = '<div class="flex items-center justify-between mb-4">';
+    html += '<h3 class="text-xs font-bold text-brand-muted uppercase tracking-widest">RECENT DICTATIONS</h3>';
+    html += '</div>';
+    html += '<div class="bg-white rounded-2xl border border-brand-border divide-y divide-brand-border shadow-sm overflow-hidden">';
+    
+    items.forEach(function(item) {
+      var appBadge = item.app_name || 'Desktop';
+      var finalTxt = item.final_text || item.spoken_text || '';
+      var timeStr = item.time_str || '';
+      
+      html += '<div class="p-6 flex items-start space-x-6 hover:bg-gray-50 transition-colors group">';
+      html += '  <div class="flex flex-col items-start min-w-[75px]">';
+      html += '    <span class="text-xs font-medium text-brand-muted whitespace-nowrap">' + escapeHtml(timeStr) + '</span>';
+      html += '    <span class="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded mt-1 border border-blue-100">' + escapeHtml(appBadge) + '</span>';
+      html += '  </div>';
+      html += '  <div class="flex-1">';
+      html += '    <p class="text-brand-text leading-relaxed font-medium">' + escapeHtml(finalTxt) + '</p>';
+      html += '  </div>';
+      html += '  <div class="flex items-center space-x-3 opacity-0 group-hover:opacity-100 transition-opacity">';
+      html += '    <button onclick="navigator.clipboard.writeText(\'' + escapeJs(finalTxt) + '\')" class="p-1.5 text-brand-muted hover:text-brand-primary hover:bg-white rounded-lg border border-transparent hover:border-brand-border shadow-sm" title="Copy to clipboard">';
+      html += '      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>';
+      html += '    </button>';
+      html += '  </div>';
+      html += '</div>';
+    });
+    
+    html += '</div>';
+    feedSection.innerHTML = html;
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+    if (window.pyqtBridge) {
+      try {
+        var historyJson = window.pyqtBridge.getHistory();
+        var historyData = JSON.parse(historyJson);
+        renderHistoryFeed(historyData);
+      } catch(e) {
+        console.error("Failed to load history:", e);
+      }
+    }
+  });
+</script>
 </body></html>
