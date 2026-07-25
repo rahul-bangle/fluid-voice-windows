@@ -536,8 +536,9 @@ class FluidVoiceApp(QObject):
                 paste_latency_ms = (t_paste_done - t_paste_start) * 1000.0
 
                 total_processing_ms = (t_paste_done - getattr(self, '_t_key_release', t_pipeline_start)) * 1000.0
-                mode_str = "HYBRID HYPER-MODE (Local STT -> Groq 70B)"
-                stt_engine_name = "Sherpa-ONNX SenseVoice INT8 (Local)"
+                mode_str = "100% LOCAL OFFLINE" if force_offline else "HYBRID CLOUD (Groq Whisper + Llama)"
+                if 'stt_engine_name' not in locals():
+                    stt_engine_name = "Sherpa-ONNX SenseVoice INT8" if force_offline else "Groq Whisper Turbo"
                 print(f"\n=================== [{mode_str} LATENCY METRICS SUMMARY] ===================")
                 print(f"  • Stage 1 STT Latency ({stt_engine_name}) : {stt_latency_ms:.1f} ms")
                 print(f"  • Stage 2 LLM/Rule Cleanup Latency                         : {llm_latency_ms:.1f} ms")
