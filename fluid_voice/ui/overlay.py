@@ -164,9 +164,10 @@ class WaveformWidget(QWidget):
         elif self._state == "transcribing":
             color_start = QColor("#8B5CF6")
             color_end = QColor("#6366F1")
-        elif self._state == "pasted":
-            color_start = QColor("#22C55E")
-            color_end = QColor("#10B981")
+        elif self._state in ("pasted", "idle", "peace"):
+            # Wispr Flow Soft Emerald Peace State
+            color_start = QColor("#10B981")
+            color_end = QColor("#059669")
         else:  # error / fallback
             color_start = QColor("#EF4444")
             color_end = QColor("#F59E0B")
@@ -213,7 +214,8 @@ class OverlayWidget(QWidget):
     STATE_COLORS = {
         "listening": QColor(0, 210, 255, 220),       # Cyan
         "transcribing": QColor(255, 170, 0, 220),    # Amber/Gold
-        "pasted": QColor(50, 215, 75, 220),          # Emerald Green
+        "pasted": QColor(16, 185, 129, 220),         # Wispr Flow Soft Emerald Peace Green
+        "peace": QColor(16, 185, 129, 220),          # Wispr Flow Soft Emerald Peace Green
         "error": QColor(255, 69, 58, 220),           # Bright Red
         "idle": QColor(156, 163, 175, 220),          # Gray
     }
