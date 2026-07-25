@@ -4,6 +4,7 @@ import time
 import ctypes
 import signal
 import logging
+import threading
 from enum import Enum, auto
 from pathlib import Path
 from PyQt6.QtWidgets import QApplication
@@ -219,6 +220,12 @@ class FluidVoiceApp(QObject):
             except Exception as e:
                 logger.warning(f"Could not initialize GroqSTTClient on startup: {e}")
 
+        # Pre-Warm Local STT Model (Sherpa-ONNX SenseVoice INT8) in Background Thread
+        if not hasattr(self, "local_stt_client") or self.local_stt_client is None:
+            from fluid_voice.stt_local import LocalWhisperSTTClient
+            self.local_stt_client = LocalWhisperSTTClient()
+            threading.Thread(target=self.local_stt_client.initialize_model, daemon=True).start()
+
         # Initialize Hotkey Listener Engine
         if self.hotkey_engine is None:
             self.hotkey_engine = HotkeyListener(
@@ -423,11 +430,10 @@ class FluidVoiceApp(QObject):
             sample_rate = self.audio_recorder._sample_rate if self.audio_recorder else 16000
             t_stt_start = time.perf_counter()
 
-            force_offline = (
-                os.getenv("FORCE_OFFLINE", "0").strip() in ("1", "true", "True")
-                or getattr(self.config_manager.data, "force_offline_mode", False)
-                or getattr(self.config_manager.data, "use_fast_local_engine", False)
-            )
+            force_offline = True
+            print("\n" + "="*75)
+            print("🔌 [FORCED PURE LOCAL MODE] GROQ CLOUD STT & LLMS 100% BYPASSED")
+            print("="*75)
 
             raw_text = None
             if self.stt_client is not None and not force_offline:
@@ -441,16 +447,21 @@ class FluidVoiceApp(QObject):
                 from fluid_voice.stt_local import LocalWhisperSTTClient
                 if not hasattr(self, "local_stt_client") or self.local_stt_client is None:
                     self.local_stt_client = LocalWhisperSTTClient()
-                print(f"[STAGE 1 LOCAL STT] ⚡ Transcribing via Local Offline STT Fallback (faster-whisper small INT8)...")
+
+                t_loc_start = time.perf_counter()
+                print(f"[STAGE 1 LOCAL STT] ⚡ Transcribing via Local Offline STT (Sherpa-ONNX SenseVoice INT8)...")
                 raw_text = self.local_stt_client.transcribe_audio_bytes(
                     audio_bytes,
                     prompt=self.config_manager.data.hinglish_prompt if self.config_manager else None,
                 )
+                stt_latency_ms = (time.perf_counter() - t_loc_start) * 1000.0
 
             self._last_raw_transcript = raw_text or ""
 
             t_stt_done = time.perf_counter()
-            stt_latency_ms = (t_stt_done - t_stt_start) * 1000.0
+            if not force_offline:
+                stt_latency_ms = (t_stt_done - t_stt_start) * 1000.0
+            stt_engine_name = "Sherpa-ONNX SenseVoice INT8" if force_offline else "Groq Whisper Turbo"
             print(f"[STAGE 1 RAW ASR] ({stt_latency_ms:.1f} ms): '{raw_text}'")
 
             if self.post_processor is None:
@@ -491,14 +502,14 @@ class FluidVoiceApp(QObject):
             raw_text = cleaned_raw
             raw_lower = raw_text.lower()
 
-            api_key = self.config_manager.get_api_key() or os.getenv("GROQ_API_KEY", "").strip()
             t_llm_start = time.perf_counter()
 
             if force_offline:
                 print("[STAGE 2 LOCAL] ⚡ Ultra-fast sub-millisecond local rule engine active (100% Offline Mode)...")
                 processed_text = self.post_processor.process(raw_text)
             else:
-                print("[STAGE 2 LLM] ⚡ Cleaning & formatting via Groq Llama-3.1-8B Instant...")
+                api_key = self.config_manager.get_api_key() or os.getenv("GROQ_API_KEY", "").strip()
+                print(f"[STAGE 2 LLM] ⚡ Cleaning & formatting via Groq Llama-3.1-8B Instant...")
                 try:
                     processed_text = self.post_processor.process_with_groq_llm(
                         raw_text, api_key=api_key, context=self._current_context, memory_engine=self.memory_engine
@@ -529,8 +540,9 @@ class FluidVoiceApp(QObject):
 
                 total_processing_ms = (t_paste_done - getattr(self, '_t_key_release', t_pipeline_start)) * 1000.0
                 mode_str = "100% LOCAL OFFLINE" if force_offline else "HYBRID CLOUD"
+                stt_engine_name = "Sherpa-ONNX SenseVoice INT8" if force_offline else "Groq Whisper Turbo"
                 print(f"\n=================== [{mode_str} LATENCY METRICS SUMMARY] ===================")
-                print(f"  • Stage 1 STT Latency ({'faster-whisper small INT8' if force_offline else 'Groq Whisper Turbo'}) : {stt_latency_ms:.1f} ms")
+                print(f"  • Stage 1 STT Latency ({stt_engine_name}) : {stt_latency_ms:.1f} ms")
                 print(f"  • Stage 2 LLM/Rule Cleanup Latency                         : {llm_latency_ms:.1f} ms")
                 print(f"  • Win32 Direct SendInput Injection Latency                : {paste_latency_ms:.1f} ms")
                 print(f"  • TOTAL KEY RELEASE -> AUTO-PASTE                         : {total_processing_ms:.1f} ms")
