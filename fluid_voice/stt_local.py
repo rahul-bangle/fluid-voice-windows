@@ -1,8 +1,8 @@
 """
 fluid_voice.stt_local: High-Performance Sub-300ms Offline Local STT Engine.
 
-Powered by Sherpa-ONNX + SenseVoice-Small INT8 non-autoregressive ASR.
-Provides 100% offline dictation resilience when internet drops or Groq Cloud API times out.
+Provides dual-engine execution (Sherpa-ONNX SenseVoice INT8 vs Faster-Whisper Small)
+with real-time execution logging and performance audit tracking.
 """
 
 import os
@@ -11,7 +11,7 @@ import logging
 import time
 import tempfile
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ except ImportError:
     sf = None
     HAS_SHERPA_ONNX = False
 
-# Backward compatibility fallback
+# Check Faster-Whisper availability
 try:
     from faster_whisper import WhisperModel
     HAS_FASTER_WHISPER = True
@@ -36,8 +36,11 @@ except ImportError:
 
 class LocalWhisperSTTClient:
     """
-    High-performance offline local STT client using Sherpa-ONNX + SenseVoice INT8 engine.
-    Delivers sub-300ms local offline transcription on CPU (80x faster than 22s Whisper small).
+    High-performance offline local STT client supporting both:
+    1. Sherpa-ONNX SenseVoice INT8 (Primary Sub-300ms non-autoregressive)
+    2. Faster-Whisper Small (Secondary Autoregressive Fallback)
+
+    Logs every execution to track which engine handled dictation and its exact latency.
     """
 
     def __init__(
@@ -53,6 +56,7 @@ class LocalWhisperSTTClient:
         self.download_root = download_root or (Path.home() / ".cache" / "fluid_voice" / "models" / "sensevoice_onnx")
         self._recognizer: Optional[Any] = None
         self._whisper_fallback: Optional[Any] = None
+        self._active_engine_name: str = "NONE"
         self._is_loading = False
 
     def is_available(self) -> bool:
@@ -60,7 +64,7 @@ class LocalWhisperSTTClient:
         return (HAS_SHERPA_ONNX and self._recognizer is not None) or (HAS_FASTER_WHISPER and self._whisper_fallback is not None)
 
     def initialize_model(self) -> bool:
-        """Loads Sherpa-ONNX SenseVoice INT8 non-autoregressive model into memory."""
+        """Loads Sherpa-ONNX SenseVoice INT8 or Faster-Whisper into RAM."""
         if self._recognizer is not None or self._whisper_fallback is not None:
             return True
 
@@ -73,7 +77,7 @@ class LocalWhisperSTTClient:
             try:
                 t0 = time.perf_counter()
                 self._is_loading = True
-                logger.info(f"Loading local Sherpa-ONNX SenseVoice INT8 model from {model_path}...")
+                print(f"[ENGINE INIT] ⚡ Loading Primary Local Engine: Sherpa-ONNX SenseVoice INT8 ({model_path.name})...")
                 
                 self._recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(
                     model=str(model_path),
@@ -82,51 +86,32 @@ class LocalWhisperSTTClient:
                     use_itn=True,
                     provider=self.device.lower() if self.device.lower() in ("cpu", "cuda") else "cpu",
                 )
+                self._active_engine_name = "Sherpa-ONNX SenseVoice INT8"
                 self._is_loading = False
                 elapsed_sec = time.perf_counter() - t0
-                logger.info(f"Sherpa-ONNX SenseVoice INT8 loaded in {elapsed_sec:.2f}s!")
+                print(f"✅ [ENGINE READY] Primary Engine '{self._active_engine_name}' loaded in {elapsed_sec:.2f}s!")
                 return True
             except Exception as e:
                 self._is_loading = False
-                logger.warning(f"Failed to load Sherpa-ONNX model: {e}")
+                print(f"⚠️ [ENGINE INIT FAIL] Sherpa-ONNX failed ({e}). Trying fallback...")
                 self._recognizer = None
 
-        # 2. Automatic HuggingFace Download Fallback if files don't exist yet
-        if HAS_SHERPA_ONNX and not model_path.exists():
-            try:
-                from huggingface_hub import snapshot_download
-                logger.info("Downloading SenseVoice INT8 model from HuggingFace (csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17)...")
-                snapshot_download(
-                    repo_id="csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
-                    local_dir=str(self.download_root),
-                )
-                if model_path.exists() and tokens_path.exists():
-                    self._recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(
-                        model=str(model_path),
-                        tokens=str(tokens_path),
-                        num_threads=4,
-                        use_itn=True,
-                        provider="cpu",
-                    )
-                    return True
-            except Exception as e:
-                logger.warning(f"HuggingFace auto-download for SenseVoice failed: {e}")
-
-        # 3. Secondary Fallback: Faster-Whisper INT8 (Greedy Search beam_size=1)
+        # 2. Secondary Fallback: Faster-Whisper INT8 (Greedy Search)
         if HAS_FASTER_WHISPER:
             try:
                 t0 = time.perf_counter()
-                logger.info("Falling back to faster-whisper INT8 greedy model...")
+                print("[ENGINE INIT] 🔄 Loading Secondary Local Engine: Faster-Whisper Small INT8...")
                 self._whisper_fallback = WhisperModel(
-                    "tiny.en",
+                    "small",
                     device=self.device,
                     compute_type="int8",
                     cpu_threads=4,
                 )
-                logger.info(f"Faster-whisper fallback loaded in {time.perf_counter() - t0:.2f}s.")
+                self._active_engine_name = "Faster-Whisper Small INT8"
+                print(f"✅ [ENGINE READY] Secondary Engine '{self._active_engine_name}' loaded in {time.perf_counter() - t0:.2f}s!")
                 return True
             except Exception as e:
-                logger.warning(f"Failed faster-whisper fallback: {e}")
+                print(f"❌ [ENGINE INIT FAIL] Faster-whisper fallback failed: {e}")
 
         return False
 
@@ -137,14 +122,14 @@ class LocalWhisperSTTClient:
         prompt: Optional[str] = None,
     ) -> str:
         """
-        Transcribes raw WAV audio bytes using local offline Sherpa-ONNX engine (<300ms latency).
+        Transcribes raw WAV audio bytes and tracks execution logs & latency for auditing.
         """
         if not audio_bytes or len(audio_bytes) < 100:
             return ""
 
         if self._recognizer is None and self._whisper_fallback is None:
             if not self.initialize_model():
-                logger.warning("Local STT model not loaded; returning empty string for offline fallback.")
+                print("[LOCAL ENGINE TRACKER] ❌ No local engine available for transcription.")
                 return ""
 
         temp_wav = None
@@ -154,26 +139,39 @@ class LocalWhisperSTTClient:
                 temp_wav = f.name
 
             t0 = time.perf_counter()
+            engine_used = "NONE"
 
-            # Execute via Sherpa-ONNX SenseVoice Engine (Sub-300ms)
+            # Execute via Primary Sherpa-ONNX SenseVoice INT8
             if self._recognizer is not None and sf is not None:
+                engine_used = "Sherpa-ONNX SenseVoice INT8 (Sub-300ms Engine)"
                 samples, sr = sf.read(temp_wav, dtype="float32")
                 stream = self._recognizer.create_stream()
                 stream.accept_waveform(sr, samples)
                 self._recognizer.decode_stream(stream)
                 transcript = stream.result.text.strip()
+            # Execute via Secondary Faster-Whisper Small
             elif self._whisper_fallback is not None:
+                engine_used = "Faster-Whisper Small INT8 (Autoregressive Fallback)"
                 segments, _ = self._whisper_fallback.transcribe(temp_wav, beam_size=1, language=language)
                 transcript = " ".join([seg.text for seg in segments]).strip()
             else:
                 transcript = ""
 
             elapsed_ms = (time.perf_counter() - t0) * 1000.0
-            logger.info(f"[LOCAL OFFLINE STT] ({elapsed_ms:.1f}ms): '{transcript[:40]}...'")
+            
+            # PROOF & AUDIT TRACKER LOG PRINTING
+            print("=" * 75)
+            print("📊 VELOVOICE LOCAL STT ENGINE EXECUTION TRACKER LOG")
+            print("=" * 75)
+            print(f" 🔹 Active Engine Used : {engine_used}")
+            print(f" ⏱️ Execution Latency  : {elapsed_ms:.1f} ms")
+            print(f" 📝 Raw Output Text    : '{transcript}'")
+            print("=" * 75)
+
             return transcript
 
         except Exception as err:
-            logger.error(f"Error during local STT transcription: {err}")
+            print(f"❌ [LOCAL ENGINE ERROR] Exception during transcription: {err}")
             return ""
         finally:
             if temp_wav and os.path.exists(temp_wav):
