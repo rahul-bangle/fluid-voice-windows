@@ -430,23 +430,36 @@ class FluidVoiceApp(QObject):
             sample_rate = self.audio_recorder._sample_rate if self.audio_recorder else 16000
             t_stt_start = time.perf_counter()
 
-            print("\n" + "="*75)
-            print("🚀 [HYBRID HYPER-MODE] STAGE 1: LOCAL SHERPA-ONNX STT ➔ STAGE 2: GROQ LLAMA-3.3-70B VERSATILE")
-            print("="*75)
-
-            from fluid_voice.stt_local import LocalWhisperSTTClient
-            if not hasattr(self, "local_stt_client") or self.local_stt_client is None:
-                self.local_stt_client = LocalWhisperSTTClient()
-
-            t_stt_start = time.perf_counter()
-            print(f"[STAGE 1 LOCAL STT] ⚡ Transcribing via Local Offline STT (Sherpa-ONNX SenseVoice INT8)...")
-            raw_text = self.local_stt_client.transcribe_audio_bytes(
-                audio_bytes,
-                prompt=self.config_manager.data.hinglish_prompt if self.config_manager else None,
+            force_offline = (
+                os.getenv("FORCE_OFFLINE", "0").strip() in ("1", "true", "True")
+                or getattr(self.config_manager.data, "force_offline_mode", False)
+                or getattr(self.config_manager.data, "use_fast_local_engine", False)
             )
+
+            raw_text = None
+            if self.stt_client is not None and not force_offline:
+                try:
+                    print(f"[STAGE 1 STT] 📡 Transcribing {len(audio_bytes)} bytes audio via Groq Whisper-v3-Turbo...")
+                    raw_text = self.stt_client.transcribe(audio_bytes, sample_rate=sample_rate)
+                    stt_engine_name = "Groq Whisper Turbo (Cloud)"
+                except Exception as cloud_err:
+                    logger.warning(f"[CIRCUIT BREAKER TRIGGERED] Groq STT cloud request failed ({cloud_err}). Failing over to Local STT...")
+
+            if not raw_text:
+                from fluid_voice.stt_local import LocalWhisperSTTClient
+                if not hasattr(self, "local_stt_client") or self.local_stt_client is None:
+                    self.local_stt_client = LocalWhisperSTTClient()
+
+                t_loc_start = time.perf_counter()
+                print(f"[STAGE 1 LOCAL STT] ⚡ Transcribing via Local Offline STT Fallback (Sherpa-ONNX SenseVoice INT8)...")
+                raw_text = self.local_stt_client.transcribe_audio_bytes(
+                    audio_bytes,
+                    prompt=self.config_manager.data.hinglish_prompt if self.config_manager else None,
+                )
+                stt_engine_name = "Sherpa-ONNX SenseVoice INT8 (Local Fallback)"
+
             t_stt_done = time.perf_counter()
             stt_latency_ms = (t_stt_done - t_stt_start) * 1000.0
-            stt_engine_name = "Sherpa-ONNX SenseVoice INT8 (Local)"
             print(f"[STAGE 1 RAW ASR] ({stt_latency_ms:.1f} ms): '{raw_text}'")
 
             if self.post_processor is None:
