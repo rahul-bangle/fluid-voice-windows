@@ -150,10 +150,30 @@ class VeloVoiceDashboardWindow(QMainWindow):
 
         self._init_ui()
 
+    def show_maximized_dashboard(self) -> None:
+        self.showMaximized()
+        self.raise_()
+        self.activateWindow()
+
     def _init_ui(self) -> None:
         main_html = (
             self.frontend_dir / "velo_ai_dashboard_light_mode" / "code.html"
         ).resolve()
+
+        if not HAS_WEBENGINE:
+            logger.error("PyQt6.QtWebEngineWidgets is not installed or available.")
+            fallback = QWidget(self)
+            self.setCentralWidget(fallback)
+            return
+
+        if not main_html.exists():
+            logger.error(f"Main HTML mockup file not found at: {main_html}")
+            # Dynamic fallback search if working directory or relative path shifted
+            alt_dir = Path(__file__).resolve().parents[2] / "Frontend" / "stitch_velovoice_desktop_dictation_system"
+            if alt_dir.exists():
+                self.frontend_dir = alt_dir
+                main_html = (self.frontend_dir / "velo_ai_dashboard_light_mode" / "code.html").resolve()
+                logger.info(f"Resolved alternative frontend directory: {self.frontend_dir}")
 
         if HAS_WEBENGINE and main_html.exists():
             self.web_view = QWebEngineView(self)
@@ -209,8 +229,11 @@ class VeloVoiceDashboardWindow(QMainWindow):
         folder = self.PAGE_MAP.get(page_name.lower(), "velo_ai_dashboard_light_mode")
         html_file = (self.frontend_dir / folder / "code.html").resolve()
         if HAS_WEBENGINE and hasattr(self, "web_view") and html_file.exists():
-            self.web_view.load(QUrl.fromLocalFile(str(html_file)))
-            logger.info(f"Switched Velo AI Dashboard page to: {page_name} ({html_file})")
+            current_url = self.web_view.url().toLocalFile()
+            target_url = str(html_file)
+            if current_url != target_url:
+                self.web_view.load(QUrl.fromLocalFile(target_url))
+                logger.info(f"Switched Velo AI Dashboard page to: {page_name} ({html_file})")
 
     def closeEvent(self, event) -> None:
         """Hides window to system tray when user clicks close (X)."""

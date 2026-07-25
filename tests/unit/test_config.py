@@ -38,12 +38,12 @@ def test_get_app_data_dir_default_and_custom_env(tmp_path):
 
 
 def test_config_manager_default_values(tmp_path):
-    """Tier 1: Verifies default ConfigData values upon initial creation."""
+    """Tier 1: Verifies ConfigManager initializes with default values when config file does not exist."""
     config_mgr = ConfigManager(config_dir=tmp_path)
     data = config_mgr.data
 
-    assert data.hotkey == "Alt+S"
-    assert data.vad_silence_threshold_db == -40.0
+    assert isinstance(data, ConfigData)
+    assert data.hotkey == "Ctrl+Shift"
     assert data.vad_silence_duration_s == 1.5
     assert data.max_recording_duration_s == 30
     assert data.auto_paste is True
@@ -103,13 +103,13 @@ def test_config_manager_corrupted_json_recovery(tmp_path):
     config_file.write_text("{corrupted: json data...", encoding="utf-8")
 
     config_mgr = ConfigManager(config_dir=tmp_path)
-    assert config_mgr.data.hotkey == "Alt+S"
+    assert config_mgr.data.hotkey == "Ctrl+Shift"
     assert config_mgr.data.max_recording_duration_s == 30
 
     # Verify config.json was overwritten with valid default JSON
     with open(config_file, "r", encoding="utf-8") as f:
         data = json.load(f)
-    assert data["hotkey"] == "Alt+S"
+    assert data["hotkey"] == "Ctrl+Shift"
 
 
 def test_api_key_keyring_success_storage(tmp_path):

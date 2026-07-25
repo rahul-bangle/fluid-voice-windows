@@ -100,7 +100,7 @@ class Top8PromptRanker:
 @dataclass
 class ConfigData:
     """Application configuration schema with defaults."""
-    hotkey: str = "Alt+S"
+    hotkey: str = "Ctrl+Shift"
     vad_silence_threshold_db: float = -40.0
     vad_silence_duration_s: float = 1.5
     max_recording_duration_s: int = 30
