@@ -430,38 +430,23 @@ class FluidVoiceApp(QObject):
             sample_rate = self.audio_recorder._sample_rate if self.audio_recorder else 16000
             t_stt_start = time.perf_counter()
 
-            force_offline = True
             print("\n" + "="*75)
-            print("🔌 [FORCED PURE LOCAL MODE] GROQ CLOUD STT & LLMS 100% BYPASSED")
+            print("🚀 [HYBRID HYPER-MODE] STAGE 1: LOCAL SHERPA-ONNX STT ➔ STAGE 2: GROQ LLAMA-3.3-70B VERSATILE")
             print("="*75)
 
-            raw_text = None
-            if self.stt_client is not None and not force_offline:
-                try:
-                    print(f"[STAGE 1 STT] 📡 Transcribing {len(audio_bytes)} bytes audio via Groq Whisper-v3...")
-                    raw_text = self.stt_client.transcribe(audio_bytes, sample_rate=sample_rate)
-                except Exception as cloud_err:
-                    logger.warning(f"[CIRCUIT BREAKER TRIGGERED] Groq STT cloud request failed ({cloud_err}). Failing over to Local STT...")
+            from fluid_voice.stt_local import LocalWhisperSTTClient
+            if not hasattr(self, "local_stt_client") or self.local_stt_client is None:
+                self.local_stt_client = LocalWhisperSTTClient()
 
-            if not raw_text:
-                from fluid_voice.stt_local import LocalWhisperSTTClient
-                if not hasattr(self, "local_stt_client") or self.local_stt_client is None:
-                    self.local_stt_client = LocalWhisperSTTClient()
-
-                t_loc_start = time.perf_counter()
-                print(f"[STAGE 1 LOCAL STT] ⚡ Transcribing via Local Offline STT (Sherpa-ONNX SenseVoice INT8)...")
-                raw_text = self.local_stt_client.transcribe_audio_bytes(
-                    audio_bytes,
-                    prompt=self.config_manager.data.hinglish_prompt if self.config_manager else None,
-                )
-                stt_latency_ms = (time.perf_counter() - t_loc_start) * 1000.0
-
-            self._last_raw_transcript = raw_text or ""
-
+            t_stt_start = time.perf_counter()
+            print(f"[STAGE 1 LOCAL STT] ⚡ Transcribing via Local Offline STT (Sherpa-ONNX SenseVoice INT8)...")
+            raw_text = self.local_stt_client.transcribe_audio_bytes(
+                audio_bytes,
+                prompt=self.config_manager.data.hinglish_prompt if self.config_manager else None,
+            )
             t_stt_done = time.perf_counter()
-            if not force_offline:
-                stt_latency_ms = (t_stt_done - t_stt_start) * 1000.0
-            stt_engine_name = "Sherpa-ONNX SenseVoice INT8" if force_offline else "Groq Whisper Turbo"
+            stt_latency_ms = (t_stt_done - t_stt_start) * 1000.0
+            stt_engine_name = "Sherpa-ONNX SenseVoice INT8 (Local)"
             print(f"[STAGE 1 RAW ASR] ({stt_latency_ms:.1f} ms): '{raw_text}'")
 
             if self.post_processor is None:
@@ -503,20 +488,15 @@ class FluidVoiceApp(QObject):
             raw_lower = raw_text.lower()
 
             t_llm_start = time.perf_counter()
-
-            if force_offline:
-                print("[STAGE 2 LOCAL] ⚡ Ultra-fast sub-millisecond local rule engine active (100% Offline Mode)...")
+            api_key = self.config_manager.get_api_key() or os.getenv("GROQ_API_KEY", "").strip()
+            print(f"[STAGE 2 LLM] ⚡ Fixing acoustic mis-hears & formatting via Groq Llama-3.3-70B Versatile...")
+            try:
+                processed_text = self.post_processor.process_with_groq_llm(
+                    raw_text, api_key=api_key, context=self._current_context, memory_engine=self.memory_engine
+                )
+            except Exception as llm_err:
+                logger.warning(f"Stage 2 LLM unavailable ({llm_err}). Falling back to fast deterministic rule engine.")
                 processed_text = self.post_processor.process(raw_text)
-            else:
-                api_key = self.config_manager.get_api_key() or os.getenv("GROQ_API_KEY", "").strip()
-                print(f"[STAGE 2 LLM] ⚡ Cleaning & formatting via Groq Llama-3.1-8B Instant...")
-                try:
-                    processed_text = self.post_processor.process_with_groq_llm(
-                        raw_text, api_key=api_key, context=self._current_context, memory_engine=self.memory_engine
-                    )
-                except Exception as llm_err:
-                    logger.warning(f"Stage 2 LLM unavailable ({llm_err}). Falling back to fast deterministic rule engine.")
-                    processed_text = self.post_processor.process(raw_text)
 
             cleaned_text, action = parse_spoken_action(processed_text)
             self._last_transcript = cleaned_text or processed_text or ""
@@ -539,8 +519,8 @@ class FluidVoiceApp(QObject):
                 paste_latency_ms = (t_paste_done - t_paste_start) * 1000.0
 
                 total_processing_ms = (t_paste_done - getattr(self, '_t_key_release', t_pipeline_start)) * 1000.0
-                mode_str = "100% LOCAL OFFLINE" if force_offline else "HYBRID CLOUD"
-                stt_engine_name = "Sherpa-ONNX SenseVoice INT8" if force_offline else "Groq Whisper Turbo"
+                mode_str = "HYBRID HYPER-MODE (Local STT -> Groq 70B)"
+                stt_engine_name = "Sherpa-ONNX SenseVoice INT8 (Local)"
                 print(f"\n=================== [{mode_str} LATENCY METRICS SUMMARY] ===================")
                 print(f"  • Stage 1 STT Latency ({stt_engine_name}) : {stt_latency_ms:.1f} ms")
                 print(f"  • Stage 2 LLM/Rule Cleanup Latency                         : {llm_latency_ms:.1f} ms")
