@@ -140,6 +140,7 @@ def test_settings_dialog_api_key_validation_empty_input(qapp, tmp_path):
 
 def test_settings_dialog_test_audio_capture_handler(qapp, tmp_path):
     """Tier 2: Verifies test_audio_capture queries devices and updates status label."""
+    import fluid_voice.audio
     config_mgr = ConfigManager(config_dir=tmp_path)
     dialog = SettingsDialog(config_manager=config_mgr)
 

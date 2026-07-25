@@ -38,7 +38,7 @@ class FluidVoiceTrayIcon(QSystemTrayIcon):
         self.toggle_action = menu.addAction("Toggle Recording (Alt+S)")
         self.toggle_action.triggered.connect(self.recording_toggled.emit)
 
-        self.dashboard_action = menu.addAction("📊 Open Dashboard & History")
+        self.dashboard_action = menu.addAction("📊 Open Dashboard")
         self.dashboard_action.triggered.connect(self.dashboard_requested.emit)
 
         self.settings_action = menu.addAction("⚙️ Settings...")

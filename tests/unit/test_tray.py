@@ -59,7 +59,7 @@ def test_tray_context_menu_structure_and_labels(qapp):
     actions = menu.actions()
     assert len(actions) >= 4
     assert actions[0].text() == "Toggle Recording (Alt+S)"
-    assert actions[1].text() == "📊 Open Dashboard & History"
+    assert actions[1].text() == "📊 Open Dashboard"
     assert actions[2].text() == "⚙️ Settings..."
     assert actions[4].text() == "🚪 Quit VeloVoice"
 

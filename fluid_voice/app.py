@@ -649,10 +649,10 @@ class FluidVoiceApp(QObject):
         self._dashboard_window.activateWindow()
 
     def open_settings(self) -> None:
-        logger.info("Open settings dialog requested")
-        dialog = SettingsDialog(config_manager=self.config_manager)
-        dialog.settings_saved.connect(self._on_settings_saved)
-        dialog.exec()
+        logger.info("Open settings requested: routing to HTML Dashboard Settings page")
+        self.open_dashboard()
+        if hasattr(self, "_dashboard_window") and self._dashboard_window:
+            self._dashboard_window.load_page("settings")
 
     def _on_settings_saved(self, settings_dict: dict) -> None:
         logger.info(f"Settings saved: {settings_dict}")
