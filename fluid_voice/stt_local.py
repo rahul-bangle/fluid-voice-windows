@@ -72,12 +72,12 @@ class LocalWhisperSTTClient:
         model_path = self.download_root / "model.int8.onnx"
         tokens_path = self.download_root / "tokens.txt"
 
-        # 1. Primary Engine: Sherpa-ONNX SenseVoice INT8 (Sub-300ms CPU Speed)
+        # 1. Primary Engine: Sherpa-ONNX SenseVoice INT8 (Offline Circuit Breaker)
         if HAS_SHERPA_ONNX and model_path.exists() and tokens_path.exists():
             try:
                 t0 = time.perf_counter()
                 self._is_loading = True
-                print(f"[ENGINE INIT] ⚡ Loading Primary Local Engine: Sherpa-ONNX SenseVoice INT8 ({model_path.name})...")
+                logger.info(f"Loading background offline circuit-breaker model: Sherpa-ONNX SenseVoice INT8 ({model_path.name})...")
                 
                 self._recognizer = sherpa_onnx.OfflineRecognizer.from_sense_voice(
                     model=str(model_path),
@@ -89,11 +89,11 @@ class LocalWhisperSTTClient:
                 self._active_engine_name = "Sherpa-ONNX SenseVoice INT8"
                 self._is_loading = False
                 elapsed_sec = time.perf_counter() - t0
-                print(f"✅ [ENGINE READY] Primary Engine '{self._active_engine_name}' loaded in {elapsed_sec:.2f}s!")
+                logger.info(f"Background offline engine '{self._active_engine_name}' pre-warmed in {elapsed_sec:.2f}s.")
                 return True
             except Exception as e:
                 self._is_loading = False
-                print(f"⚠️ [ENGINE INIT FAIL] Sherpa-ONNX failed ({e}). Trying fallback...")
+                logger.warning(f"Sherpa-ONNX init failed ({e}).")
                 self._recognizer = None
 
         # 2. Secondary Fallback: Faster-Whisper INT8 (Greedy Search)
