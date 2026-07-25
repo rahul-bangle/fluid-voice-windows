@@ -501,15 +501,19 @@ class FluidVoiceApp(QObject):
             raw_lower = raw_text.lower()
 
             t_llm_start = time.perf_counter()
-            api_key = self.config_manager.get_api_key() or os.getenv("GROQ_API_KEY", "").strip()
-            print(f"[STAGE 2 LLM] ⚡ Fixing acoustic mis-hears & formatting via Groq Llama-3.3-70B Versatile...")
-            try:
-                processed_text = self.post_processor.process_with_groq_llm(
-                    raw_text, api_key=api_key, context=self._current_context, memory_engine=self.memory_engine
-                )
-            except Exception as llm_err:
-                logger.warning(f"Stage 2 LLM unavailable ({llm_err}). Falling back to fast deterministic rule engine.")
+            if force_offline:
+                print("[STAGE 2 LOCAL] ⚡ Ultra-fast sub-millisecond local rule engine active (100% Offline Mode)...")
                 processed_text = self.post_processor.process(raw_text)
+            else:
+                api_key = self.config_manager.get_api_key() or os.getenv("GROQ_API_KEY", "").strip()
+                print(f"[STAGE 2 LLM] ⚡ Cleaning & formatting via Groq Llama-3.1-8B Instant...")
+                try:
+                    processed_text = self.post_processor.process_with_groq_llm(
+                        raw_text, api_key=api_key, context=self._current_context, memory_engine=self.memory_engine
+                    )
+                except Exception as llm_err:
+                    logger.warning(f"Stage 2 LLM unavailable ({llm_err}). Falling back to fast deterministic rule engine.")
+                    processed_text = self.post_processor.process(raw_text)
 
             cleaned_text, action = parse_spoken_action(processed_text)
             self._last_transcript = cleaned_text or processed_text or ""
