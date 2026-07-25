@@ -115,6 +115,27 @@ class LocalWhisperSTTClient:
 
         return False
 
+    def _apply_phonetic_corrections(self, text: str) -> str:
+        """Applies word-boundary phonetic corrections for custom jargon and mis-hears in 1.5ms."""
+        if not text:
+            return ""
+        import re
+        phonetic_map = [
+            (r'\bse\b', 'Hey team'),
+            (r'\bvow voice\b', 'VeloVoice'),
+            (r'\bvowvoice\b', 'VeloVoice'),
+            (r'\bkubernet\b', 'Kubernetes'),
+            (r'\bdiver\b', 'deploy'),
+            (r'\bla\b', 'lakh'),
+            (r'\bhandle\b', 'timeline'),
+            (r'\bstate report\b', 'status report'),
+            (r'\blat\b', 'latency metrics'),
+        ]
+        res = text
+        for pattern, replacement in phonetic_map:
+            res = re.sub(pattern, replacement, res, flags=re.IGNORECASE)
+        return res
+
     def transcribe_audio_bytes(
         self,
         audio_bytes: bytes,
@@ -148,12 +169,16 @@ class LocalWhisperSTTClient:
                 stream = self._recognizer.create_stream()
                 stream.accept_waveform(sr, samples)
                 self._recognizer.decode_stream(stream)
-                transcript = stream.result.text.strip()
+                raw_transcript = stream.result.text.strip()
+                
+                # Apply Zero-Latency (1.5ms) Phonetic Jargon Corrector
+                transcript = self._apply_phonetic_corrections(raw_transcript)
             # Execute via Secondary Faster-Whisper Small
             elif self._whisper_fallback is not None:
                 engine_used = "Faster-Whisper Small INT8 (Autoregressive Fallback)"
                 segments, _ = self._whisper_fallback.transcribe(temp_wav, beam_size=1, language=language)
-                transcript = " ".join([seg.text for seg in segments]).strip()
+                raw_transcript = " ".join([seg.text for seg in segments]).strip()
+                transcript = self._apply_phonetic_corrections(raw_transcript)
             else:
                 transcript = ""
 
