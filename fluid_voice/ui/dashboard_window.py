@@ -85,32 +85,8 @@ class VeloWebEnginePage(QWebEnginePage if HAS_WEBENGINE else object):
         self.window = parent_window
 
     def acceptNavigationRequest(self, url: QUrl, nav_type: Any, is_main_frame: bool) -> bool:
-        """Intercepts link clicks inside Stitch HTML screens and routes them to PyQt load_page."""
-        if not HAS_WEBENGINE:
-            return True
-
-        url_str = url.toString()
-
-        # Catch custom velo://nav/<screen_name> navigation protocol
-        if url.scheme() == "velo" and url.host() == "nav":
-            screen_name = url.path().strip("/")
-            logger.info(f"Universal JS Navigation caught: switching to screen '{screen_name}'")
-            self.window.load_page(screen_name)
-            return False
-
-        # If it's an internal link click inside the HTML frontend
-        if nav_type == QWebEnginePage.NavigationType.NavigationTypeLinkClicked:
-            path = url.toLocalFile()
-            if path and os.path.exists(path):
-                logger.info(f"Navigating to local HTML screen file: {path}")
-                return True
-            elif "velo_ai_" in url_str or "vocabulary_" in url_str or "settings_" in url_str:
-                target_file = self.window._resolve_stitch_url(url_str)
-                if target_file and target_file.exists():
-                    self.window.web_view.load(QUrl.fromLocalFile(str(target_file)))
-                    return False
-
-        return super().acceptNavigationRequest(url, nav_type, is_main_frame)
+        """Allow React SPA internal state routing without external page reloads."""
+        return True
 
 
 class VeloVoiceDashboardWindow(QMainWindow):
@@ -141,7 +117,8 @@ class VeloVoiceDashboardWindow(QMainWindow):
         self.frontend_dir = (
             Path(__file__).resolve().parent.parent.parent
             / "Frontend"
-            / "stitch_velovoice_desktop_dictation_system"
+            / "velovoice_app_spa"
+            / "dist"
         )
 
         self.setWindowTitle("Velo AI - Desktop Dashboard")
@@ -158,7 +135,7 @@ class VeloVoiceDashboardWindow(QMainWindow):
 
     def _init_ui(self) -> None:
         main_html = (
-            self.frontend_dir / "velo_ai_dashboard_light_mode" / "code.html"
+            self.frontend_dir / "index.html"
         ).resolve()
 
         if not HAS_WEBENGINE:
@@ -168,13 +145,13 @@ class VeloVoiceDashboardWindow(QMainWindow):
             return
 
         if not main_html.exists():
-            logger.error(f"Main HTML mockup file not found at: {main_html}")
-            # Dynamic fallback search if working directory or relative path shifted
-            alt_dir = Path(__file__).resolve().parents[2] / "Frontend" / "stitch_velovoice_desktop_dictation_system"
+            logger.error(f"Compiled React SPA index.html file not found at: {main_html}")
+            # Fallback check
+            alt_dir = Path(__file__).resolve().parents[2] / "Frontend" / "velovoice_app_spa" / "dist"
             if alt_dir.exists():
                 self.frontend_dir = alt_dir
-                main_html = (self.frontend_dir / "velo_ai_dashboard_light_mode" / "code.html").resolve()
-                logger.info(f"Resolved alternative frontend directory: {self.frontend_dir}")
+                main_html = (self.frontend_dir / "index.html").resolve()
+                logger.info(f"Resolved React SPA dist directory: {self.frontend_dir}")
 
         if HAS_WEBENGINE and main_html.exists():
             self.web_view = QWebEngineView(self)
@@ -189,7 +166,7 @@ class VeloVoiceDashboardWindow(QMainWindow):
                 self.web_channel = QWebChannel(self.web_view.page())
                 self.web_channel.registerObject("pyqtBridge", self.web_bridge)
                 self.web_view.page().setWebChannel(self.web_channel)
-                logger.info("QWebChannel pyqtBridge registered successfully on dashboard page.")
+                logger.info("QWebChannel pyqtBridge registered successfully on React SPA page.")
             except Exception as e:
                 logger.warning(f"Could not setup QWebChannel: {e}")
 
@@ -211,41 +188,32 @@ class VeloVoiceDashboardWindow(QMainWindow):
                 QWebEngineSettings.WebAttribute.JavascriptEnabled, True
             )
 
-            # Auto-inject universal navigation script when page finishes loading
             self.web_view.loadFinished.connect(self._on_page_loaded)
-
-            # Direct QUrl.fromLocalFile loading
             self.web_view.load(QUrl.fromLocalFile(str(main_html)))
             self.setCentralWidget(self.web_view)
-            logger.info(f"Loaded pixel-perfect Velo AI HTML mockup from disk: {main_html}")
+            logger.info(f"Loaded Production React SPA from disk: {main_html}")
         else:
             logger.error(f"WebEngine or HTML mockup not found at {main_html}")
             fallback = QWidget(self)
             self.setCentralWidget(fallback)
 
     def _on_page_loaded(self, success: bool) -> None:
-        """Injects universal click navigation listener and QWebChannel JS bridge on page load."""
+        """Injects QWebChannel JS bridge on page load."""
         if success and HAS_WEBENGINE and hasattr(self, "web_view"):
-            self.web_view.page().runJavaScript(UNIVERSAL_NAV_SCRIPT)
-            
-            # Fetch data directly in Python and inject into JS immediately (Sub-5ms load time, zero QWebChannel delay!)
+            # Inject live data from Python to React SPA window object
             try:
                 if hasattr(self, "web_bridge") and self.web_bridge:
                     history_json = self.web_bridge.getHistory()
                     analytics_json = self.web_bridge.getAnalyticsSummary()
+                    vocab_json = self.web_bridge.getVocabulary()
                     
                     inject_js = f"""
                     (function() {{
                         window.pyqtBridge = {{
-                            getHistory: function() {{ return '{history_json.replace("'", "\\'")}'; }},
-                            getAnalyticsSummary: function() {{ return '{analytics_json.replace("'", "\\'")}'; }}
+                            getHistory: function() {{ return {repr(history_json)}; }},
+                            getAnalyticsSummary: function() {{ return {repr(analytics_json)}; }},
+                            getVocabulary: function() {{ return {repr(vocab_json)}; }}
                         }};
-                        if (typeof renderHistoryFeed === 'function') {{
-                            try {{ renderHistoryFeed(JSON.parse(window.pyqtBridge.getHistory())); }} catch(e) {{ console.error(e); }}
-                        }}
-                        if (typeof renderAnalytics === 'function') {{
-                            try {{ renderAnalytics(JSON.parse(window.pyqtBridge.getAnalyticsSummary())); }} catch(e) {{ console.error(e); }}
-                        }}
                     }})();
                     """
                     self.web_view.page().runJavaScript(inject_js)

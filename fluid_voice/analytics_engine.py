@@ -140,6 +140,7 @@ class AnalyticsEngine:
             }
 
     def get_recent_history(self, limit: int = 50) -> list:
+        from datetime import timezone
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
@@ -153,8 +154,12 @@ class AnalyticsEngine:
             for r in rows:
                 dt_str = str(r[1])
                 try:
-                    time_str = datetime.strptime(dt_str.split(".")[0], "%Y-%m-%d %H:%M:%S").strftime("%I:%M %p")
-                except Exception:
+                    # Explicitly mark SQLite timestamp as UTC before converting to Local Machine Time (IST)
+                    utc_dt = datetime.strptime(dt_str.split(".")[0], "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+                    local_dt = utc_dt.astimezone()
+                    time_str = local_dt.strftime("%I:%M %p")
+                except Exception as e:
+                    logger.warning(f"Failed to parse timestamp {dt_str}: {e}")
                     time_str = dt_str
                 history.append({
                     "id": r[0],

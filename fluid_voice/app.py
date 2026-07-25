@@ -535,6 +535,14 @@ class FluidVoiceApp(QObject):
 
                 if hasattr(self, "analytics_engine") and self.analytics_engine:
                     try:
+                        ctx_val = self._current_context
+                        if hasattr(ctx_val, "exe_name") and ctx_val.exe_name:
+                            app_name_str = ctx_val.exe_name.replace(".exe", "").capitalize()
+                        elif hasattr(ctx_val, "app_name") and ctx_val.app_name:
+                            app_name_str = ctx_val.app_name
+                        else:
+                            app_name_str = str(ctx_val or "Desktop")
+
                         self.analytics_engine.log_dictation(
                             spoken_text=raw_text or "",
                             final_text=cleaned_text or "",
@@ -542,7 +550,7 @@ class FluidVoiceApp(QObject):
                             stt_latency_ms=stt_latency_ms,
                             llm_latency_ms=llm_latency_ms,
                             paste_latency_ms=paste_latency_ms,
-                            app_name=getattr(self, "_current_context", "Desktop"),
+                            app_name=app_name_str,
                             ai_fixes_count=1 if raw_text and cleaned_text and raw_text.strip() != cleaned_text.strip() else 0,
                         )
                     except Exception as e:

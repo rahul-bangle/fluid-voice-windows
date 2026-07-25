@@ -53,15 +53,18 @@ class VeloVoiceWebBridge(QObject):
             return json.dumps([])
         try:
             mem_engine = self.app.memory_engine
+            terms = mem_engine.get_all_terms()
             items = []
-            if hasattr(mem_engine, "memory_data") and "items" in mem_engine.memory_data:
-                for item in mem_engine.memory_data["items"]:
-                    items.append({
-                        "term": item.get("term", ""),
-                        "variants": item.get("phonetic_variants", []),
-                        "mishears": item.get("mishears", []),
-                        "created_at": item.get("created_at", ""),
-                    })
+            for item in terms:
+                items.append({
+                    "id": item.id,
+                    "term": item.term,
+                    "category": item.category.value if hasattr(item.category, "value") else str(item.category),
+                    "variants": item.phonetic_variants,
+                    "usage_count": item.usage_count,
+                    "auto_learned": item.auto_learned,
+                    "status": "Active" if (not item.auto_learned or item.usage_count >= 2) else "Candidate (Needs 1 more usage)"
+                })
             return json.dumps(items)
         except Exception as e:
             logger.error(f"Failed to get vocabulary for WebBridge: {e}")
@@ -90,10 +93,14 @@ class VeloVoiceWebBridge(QObject):
             return False
         try:
             data = json.loads(config_json)
-            if "api_key" in data and data["api_key"].strip():
+            if "api_key" in data and data["api_key"].strip() and not data["api_key"].startswith("gsk_*"):
                 self.app.config_manager.set_api_key(data["api_key"].strip())
 
-            self.app.config_manager.update_config(data)
+            if hasattr(self.app.config_manager, "update"):
+                self.app.config_manager.update(**data)
+            elif hasattr(self.app.config_manager, "update_config"):
+                self.app.config_manager.update_config(data)
+
             logger.info("Saved settings via WebBridge.")
             self.settings_updated.emit(config_json)
             return True

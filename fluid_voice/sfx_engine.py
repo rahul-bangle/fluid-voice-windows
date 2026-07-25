@@ -38,20 +38,41 @@ class SFXEngine:
         """Toggles SFX audio feedback on/off."""
         self.enabled = enabled
 
-    def _generate_sine_wav_file(self, filename: str, frequency: float, duration_ms: int, volume: float = 0.3) -> Path:
-        """Generates a WAV audio file on disk for async SND_FILENAME playback."""
-        sample_rate = 22050
+    def _generate_harmonic_wav_file(
+        self, 
+        filename: str, 
+        frequencies: list[float], 
+        duration_ms: int, 
+        volume: float = 0.15
+    ) -> Path:
+        """
+        Generates soft, multi-harmonic metallic acoustic chimes (Wispr Flow style)
+        with smooth Exponential Attack/Decay envelope (Zero harshness, zero pop).
+        """
+        sample_rate = 44100
         num_samples = int(sample_rate * (duration_ms / 1000.0))
         audio_data = bytearray()
 
         for i in range(num_samples):
             t = float(i) / sample_rate
-            # Apply smooth envelope fade-out to prevent audio pops
-            envelope = 1.0
-            if i > num_samples - 200:
-                envelope = max(0.0, (num_samples - i) / 200.0)
+            progress = i / float(num_samples)
 
-            sample_val = int(32767 * volume * envelope * math.sin(2 * math.pi * frequency * t))
+            # Wispr Flow Soft Envelope: Fast 5ms attack + Smooth exponential decay
+            attack_samples = int(sample_rate * 0.005) # 5ms
+            if i < attack_samples:
+                envelope = i / float(attack_samples)
+            else:
+                envelope = math.exp(-6.0 * progress) # Gentle soft decay curve
+
+            # Multi-harmonic chord synthesis (Fades harsh single frequencies into soft glass bell tone)
+            mixed_sample = 0.0
+            num_freqs = len(frequencies)
+            for idx, freq in enumerate(frequencies):
+                weight = 1.0 / (idx + 1) # Higher overtones are softer
+                mixed_sample += weight * math.sin(2 * math.pi * freq * t)
+
+            sample_val = int(32767 * volume * envelope * (mixed_sample / num_freqs))
+            sample_val = max(-32768, min(32767, sample_val))
             audio_data.extend(struct.pack("<h", sample_val))
 
         file_path = self._sfx_dir / f"{filename}.wav"
@@ -65,7 +86,7 @@ class SFXEngine:
         wav_buf.extend(struct.pack("<I", 16))          # Subchunk1Size (16 for PCM)
         wav_buf.extend(struct.pack("<H", 1))           # AudioFormat (1 for PCM)
         wav_buf.extend(struct.pack("<H", 1))           # NumChannels (1 for Mono)
-        wav_buf.extend(struct.pack("<I", sample_rate)) # SampleRate
+        wav_buf.extend(struct.pack("<I", sample_rate)) # SampleRate 44.1kHz
         wav_buf.extend(struct.pack("<I", sample_rate * 2)) # ByteRate
         wav_buf.extend(struct.pack("<H", 2))           # BlockAlign
         wav_buf.extend(struct.pack("<H", 16))          # BitsPerSample
@@ -77,18 +98,22 @@ class SFXEngine:
         return file_path
 
     def _pregenerate_chimes(self) -> None:
-        """Pre-generates audio chime WAV files on disk."""
+        """Pre-generates Wispr Flow style glass-bell harmonic chimes on disk."""
         try:
-            # Startup launch chime: Pleasant 987Hz (B5) 120ms ping
-            self._sound_files["startup"] = self._generate_sine_wav_file("startup", 987, 120, volume=0.35)
-            # Start recording chime: Bright 880Hz (A5) 80ms ping
-            self._sound_files["start"] = self._generate_sine_wav_file("start", 880, 80, volume=0.35)
-            # Stop recording chime: Soft 660Hz (E5) 80ms tone
-            self._sound_files["stop"] = self._generate_sine_wav_file("stop", 660, 80, volume=0.30)
-            # Paste success chime: Bright 1046Hz (C6) 100ms ping
-            self._sound_files["paste"] = self._generate_sine_wav_file("paste", 1046, 100, volume=0.40)
-            # Error chime: Low 330Hz (E4) 120ms warning tone
-            self._sound_files["error"] = self._generate_sine_wav_file("error", 330, 120, volume=0.40)
+            # Startup chime: Soft F-Major Glass Bell Chord (F5, A5, C6) - 150ms
+            self._sound_files["startup"] = self._generate_harmonic_wav_file("startup", [698.46, 880.0, 1046.50], 150, volume=0.18)
+            
+            # Start Recording chime: Soft Ascending Dual-Tone (A5, E6) - 90ms (Wispr Flow Listening Chime)
+            self._sound_files["start"] = self._generate_harmonic_wav_file("start", [880.0, 1318.51], 90, volume=0.15)
+            
+            # Stop Recording chime: Soft Descending Dual-Tone (E6, A5) - 80ms
+            self._sound_files["stop"] = self._generate_harmonic_wav_file("stop", [1318.51, 880.0], 80, volume=0.12)
+            
+            # Paste Success chime: Pristine High Bell Ping (C6, E6, G6) - 110ms
+            self._sound_files["paste"] = self._generate_harmonic_wav_file("paste", [1046.50, 1318.51, 1567.98], 110, volume=0.18)
+            
+            # Error chime: Soft Muted Low Note (D4, F4) - 120ms
+            self._sound_files["error"] = self._generate_harmonic_wav_file("error", [293.66, 349.23], 120, volume=0.20)
         except Exception as e:
             logger.warning(f"Failed to pregenerate SFX chimes: {e}")
 

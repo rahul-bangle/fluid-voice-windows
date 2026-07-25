@@ -503,9 +503,11 @@ class MemoryEngine:
             return self.store.items.get(item_id)
 
     def get_all_terms(self) -> List[MemoryItem]:
-        """Returns all memory items."""
+        """Returns all memory items sorted by usage count and last used."""
         with self._lock:
-            return list(self.store.items.values())
+            items = list(self.store.items.values())
+            items.sort(key=lambda x: (x.usage_count, x.last_used), reverse=True)
+            return items
 
     def update_term(self, item_id: str, **kwargs) -> Optional[MemoryItem]:
         """Updates attributes of an existing memory item by ID."""
@@ -592,9 +594,16 @@ class MemoryEngine:
                     if val:
                         ctx_tags.add(str(val).upper())
 
-            # Fast candidate selection
-            if len(all_items) <= 100:
-                candidates = all_items
+            # Fast candidate selection & 1000x Confidence Filter
+            active_items = [
+                it for it in all_items 
+                if not it.auto_learned or it.usage_count >= 2 or it.category != MemoryCategory.JARGON
+            ]
+            if not active_items:
+                return []
+
+            if len(active_items) <= 100:
+                candidates = active_items
             else:
                 candidate_ids: Set[str] = set()
                 # 1. Tag matches
@@ -747,6 +756,18 @@ class MemoryEngine:
                 if not can_clean:
                     continue
 
+                # BLOCKLIST FILTER: Strictly reject window titles, shell commands, prompt instructions, and system clipboard leaks
+                blocklist_patterns = ["- brave", "- chrome", "administrator:", "do not touch", "option ", "cat ", "git ", ".md", ".py", "--conversation="]
+                if any(bp in can_clean.lower() for bp in blocklist_patterns) or any(bp in var_clean.lower() for bp in blocklist_patterns):
+                    logger.info(f"[DICTIONARY BLOCKLIST] Blocked auto-learning corrupt term: '{can_clean}'")
+                    continue
+
+                # Dictation / Text size guard: Only store short custom names, jargon, or brand terms (<= 3 words)
+                # Long sentences are dictation logs, NOT dictionary terms!
+                if len(can_clean.split()) > 3:
+                    logger.info(f"[DICTIONARY FILTER] Skipping sentence auto-save '{can_clean[:30]}...' (> 3 words).")
+                    continue
+
                 var_lower = var_clean.lower()
                 can_lower = can_clean.lower()
 
@@ -760,7 +781,8 @@ class MemoryEngine:
                         meta_keys.add(mk)
 
                 if existing:
-                    if var_lower != can_lower and var_clean not in existing.phonetic_variants:
+                    # Guard: Only append short phonetic sound variants (<= 5 words). Block long spoken sentences!
+                    if var_lower != can_lower and len(var_clean.split()) <= 5 and var_clean not in existing.phonetic_variants:
                         existing.phonetic_variants.append(var_clean)
                     for mk in meta_keys:
                         if mk not in existing.metaphone_keys:
@@ -786,13 +808,15 @@ class MemoryEngine:
                             cat_str = app_cat.value if hasattr(app_cat, "value") else str(app_cat)
                             tags.append(cat_str)
 
+                    # Production 1000x Architecture: Auto-learned terms start in Candidate Pool (confidence=1).
+                    # Only terms with confidence >= 2 are promoted into active RAG LLM prompts!
                     item = MemoryItem(
                         term=can_clean,
                         category=MemoryCategory.JARGON,
                         phonetic_variants=variants,
                         metaphone_keys=list(meta_keys),
                         context_tags=tags,
-                        usage_count=1,
+                        usage_count=1, # Starts at 1, requires >= 2 to activate
                         created_at=time.time(),
                         last_used=time.time(),
                         auto_learned=True,
